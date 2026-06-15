@@ -83,15 +83,16 @@ const PROCESOS = [
   },
 ]
 
-const DOCS_SECOP = [
-  { nombre: 'Carta de presentación',         estado: 'CARGADO',              ok: true  },
-  { nombre: 'RUP vigente (SECOP II)',         estado: 'VERIFICADO',           ok: true  },
-  { nombre: 'Cert. existencia y rep. legal',  estado: 'CARGADO HACE 2H',      ok: true  },
-  { nombre: 'Paz y salvo SENA / parafiscales',estado: 'VERIFICADO',           ok: true  },
-  { nombre: 'Estados financieros certificados',estado:'PENDIENTE REVISIÓN',   ok: false },
-  { nombre: 'Propuesta técnica',              estado: 'EN ELABORACIÓN',        ok: false },
-  { nombre: 'Formulario presupuesto oficial', estado: 'ESPERANDO CÁLCULO',    ok: false },
-  { nombre: 'Póliza garantía de seriedad',    estado: 'TRAMITANDO',           ok: false },
+type DocStatus = 'listo' | 'en_tramite' | 'pendiente'
+const DOCS_SECOP: { nombre: string; estado: string; status: DocStatus }[] = [
+  { nombre: 'Carta de presentación de oferta',                       estado: 'Listo',       status: 'listo' },
+  { nombre: 'RUP vigente (Registro Único de Proponentes)',           estado: 'Listo',       status: 'listo' },
+  { nombre: 'Estados financieros con corte (año anterior)',          estado: 'En trámite',  status: 'en_tramite' },
+  { nombre: 'Certificados de experiencia en SMMLV',                  estado: 'Listo',       status: 'listo' },
+  { nombre: 'Paz y salvo de parafiscales (SENA, ICBF, Caja)',       estado: 'Listo',       status: 'listo' },
+  { nombre: 'Póliza de seriedad de la oferta',                       estado: 'Pendiente',   status: 'pendiente' },
+  { nombre: 'Propuesta económica (formato de la entidad)',           estado: 'En trámite',  status: 'en_tramite' },
+  { nombre: 'Formato de experiencia acreditada',                     estado: 'En trámite',  status: 'en_tramite' },
 ]
 
 const ETAPAS_SECOP = [
@@ -114,21 +115,26 @@ function fmtCOP(n: number) {
 
 function useCountdown(iso: string) {
   const [txt, setTxt] = useState('')
+  const [urgent, setUrgent] = useState(false)
+  const [diffMs, setDiffMs] = useState(0)
   useEffect(() => {
     const tick = () => {
       const diff = new Date(iso).getTime() - Date.now()
+      setDiffMs(diff)
+      setUrgent(diff < 86400000)
       if (diff <= 0) { setTxt('CERRADO'); return }
       const d = Math.floor(diff / 86400000)
       const h = Math.floor((diff % 86400000) / 3600000)
       const m = Math.floor((diff % 3600000) / 60000)
-      if (d > 0) setTxt(`${d}d ${String(h).padStart(2,'0')}h`)
-      else setTxt(`${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m`)
+      const s = Math.floor((diff % 60000) / 1000)
+      if (d > 0) setTxt(`${d}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`)
+      else setTxt(`${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`)
     }
     tick()
-    const id = setInterval(tick, 30000)
+    const id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [iso])
-  return txt
+  return [txt, urgent, diffMs] as const
 }
 
 function easeOut(t: number) { return 1 - Math.pow(1 - t, 3) }
@@ -412,9 +418,7 @@ function ScoreBadge({ score }: { score: number }) {
 /* ─── Countdown cell ─────────────────────── */
 function CountdownCell({ iso }: { iso: string }) {
   const C = useTheme()
-  const txt = useCountdown(iso)
-  const diff = new Date(iso).getTime() - Date.now()
-  const urgent = diff < 86400000 * 2
+  const [txt, urgent] = useCountdown(iso)
   return (
     <span style={{ color: urgent ? C.red : C.orange, fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
       {urgent && '⚠ '}{txt}
@@ -427,7 +431,7 @@ function ProcesoCard({ p, onClick, active }: { p: typeof PROCESOS[0]; onClick: (
   const C = useTheme()
   const [hov, setHov] = useState(false)
   const diff = new Date(p.cierre).getTime() - Date.now()
-  const urgent = diff < 86400000 * 2
+  const urgent = diff < 86400000
   const scoreCol = p.score >= 80 ? C.orange : p.score >= 60 ? '#facc15' : C.red
   const accentCol = urgent ? C.red : active ? C.orange : hov ? C.orange : C.border
 
@@ -542,10 +546,48 @@ function ProcesoCard({ p, onClick, active }: { p: typeof PROCESOS[0]; onClick: (
 /* ─── Panel Seguimiento de Propuesta ─────── */
 function ProposalTracker({ proceso }: { proceso: typeof PROCESOS[0] | null }) {
   const C = useTheme()
-  const [docs, setDocs] = useState(DOCS_SECOP.map(d => d.ok))
-  const [tab, setTab] = useState<'docs' | 'etapas'>('docs')
-  const okCount = docs.filter(Boolean).length
-  const readiness = Math.round((okCount / DOCS_SECOP.length) * 100)
+  const [docStatuses, setDocStatuses] = useState<DocStatus[]>(DOCS_SECOP.map(d => d.status))
+  const [tab, setTab] = useState<'docs' | 'aiu' | 'etapas'>('docs')
+
+  // ── Calculadora AIU state ──
+  const [costosDirectos, setCostosDirectos] = useState('')
+  const [adminPct, setAdminPct] = useState('12')
+  const [imprevPct, setImprevPct] = useState('3')
+  const [utilPct, setUtilPct] = useState('6')
+
+  const cd = parseFloat(costosDirectos.replace(/\./g, '').replace(',', '.')) || 0
+  const adminVal = cd * (parseFloat(adminPct) / 100 || 0)
+  const imprevVal = cd * (parseFloat(imprevPct) / 100 || 0)
+  const utilVal = cd * (parseFloat(utilPct) / 100 || 0)
+  const aiuTotal = adminVal + imprevVal + utilVal
+  const propuestaTotal = cd + aiuTotal
+  const presupuestoOficial = proceso?.presupuesto || 1
+  const pctSobrePresupuesto = presupuestoOficial > 0 ? (propuestaTotal / presupuestoOficial) * 100 : 0
+
+  function fmtMillones(n: number) {
+    if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1).replace('.', ',')}B`
+    if (n >= 1_000_000) return `$${Math.round(n / 1_000_000)}M`
+    return `$${n.toLocaleString('es-CO')}`
+  }
+
+  // ── Document readiness ──
+  const listoCount = docStatuses.filter(s => s === 'listo').length
+  const readiness = Math.round((listoCount / DOCS_SECOP.length) * 100)
+
+  function cycleDocStatus(i: number) {
+    setDocStatuses(prev => {
+      const n = [...prev]
+      n[i] = n[i] === 'listo' ? 'en_tramite' : n[i] === 'en_tramite' ? 'pendiente' : 'listo'
+      return n
+    })
+  }
+
+  function docStatusColor(s: DocStatus) { return s === 'listo' ? C.green : s === 'en_tramite' ? '#f59e0b' : C.red }
+  function docStatusLabel(s: DocStatus) { return s === 'listo' ? 'LISTO' : s === 'en_tramite' ? 'EN TRÁMITE' : 'PENDIENTE' }
+
+  // ── Countdown real-time ──
+  const fallbackDate = '2099-12-31T23:59:59.000Z'
+  const [countdownTxt, countdownUrgent] = useCountdown(proceso?.cierre || fallbackDate)
 
   if (!proceso) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14 }}>
@@ -561,16 +603,38 @@ function ProposalTracker({ proceso }: { proceso: typeof PROCESOS[0] | null }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, gap: 0 }}>
 
-      {/* ── Encabezado ── */}
+      {/* ── Encabezado + Countdown ── */}
       <div style={{ marginBottom: 4 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 5 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 3 }}>
           Seguimiento de Propuesta
         </div>
-        <div style={{ fontSize: 10, color: C.orange, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+        <div style={{ fontSize: 10, color: C.orange, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>
           ACTIVO: {proceso.idProceso}
         </div>
-        <div style={{ fontSize: 12, color: C.textSec, marginTop: 3, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12, color: C.textSec, lineHeight: 1.4, marginBottom: 8 }}>
           {proceso.entidad}
+        </div>
+
+        {/* Countdown prominente */}
+        <div style={{
+          background: countdownUrgent ? 'rgba(239,68,68,.12)' : C.bg,
+          border: `1px solid ${countdownUrgent ? 'rgba(239,68,68,.4)' : C.border}`,
+          borderRadius: 6, padding: '10px 14px',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 20 }}>{countdownUrgent ? '⚠' : '⏱'}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
+              Cierre del proceso
+            </div>
+            <div style={{
+              fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+              color: countdownUrgent ? C.red : C.orange,
+              letterSpacing: '-0.5px', lineHeight: 1.1,
+            }}>
+              {countdownTxt}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -592,15 +656,15 @@ function ProposalTracker({ proceso }: { proceso: typeof PROCESOS[0] | null }) {
           }} />
         </div>
         <div style={{ fontSize: 10, color: C.textSec }}>
-          {okCount} de {DOCS_SECOP.length} documentos listos
+          {listoCount} de {DOCS_SECOP.length} documentos listos
         </div>
       </div>
 
       {/* ── Tabs ── */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-        {([['docs', 'Documentos'], ['etapas', 'Etapas SECOP II']] as const).map(([key, label]) => (
+        {([['docs', 'Documentos'], ['aiu', 'Calculadora AIU'], ['etapas', 'Etapas SECOP II']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{
-            flex: 1, padding: '7px', borderRadius: 5, fontSize: 11, fontWeight: 600,
+            flex: 1, padding: '7px 4px', borderRadius: 5, fontSize: 10, fontWeight: 600,
             border: `1px solid ${tab === key ? C.orange : C.border}`,
             background: tab === key ? 'rgba(249,115,22,.12)' : C.bg,
             color: tab === key ? C.orange : C.textSec,
@@ -609,45 +673,186 @@ function ProposalTracker({ proceso }: { proceso: typeof PROCESOS[0] | null }) {
         ))}
       </div>
 
-      {/* ── DOCUMENTOS ── */}
+      {/* ── DOCUMENTOS (3 estados) ── */}
       {tab === 'docs' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 4 }}>
             Documentos obligatorios — pliego de condiciones
           </div>
-          {DOCS_SECOP.map((doc, i) => (
-            <div key={i}
-              onClick={() => setDocs(prev => { const n = [...prev]; n[i] = !n[i]; return n })}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                background: C.bg,
-                border: `1px solid ${docs[i] ? 'rgba(249,115,22,.35)' : C.border}`,
-                borderRadius: 6, cursor: 'pointer', transition: 'all 160ms',
-              }}>
-              {/* Check circle */}
-              <div style={{
-                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                border: `2px solid ${docs[i] ? C.orange : C.border}`,
-                background: docs[i] ? 'rgba(249,115,22,.15)' : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all 160ms',
-              }}>
-                {docs[i] && (
-                  <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
-                    <polyline points="2,6 5,9 10,3" stroke={C.orange} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                )}
+          {DOCS_SECOP.map((doc, i) => {
+            const s = docStatuses[i]
+            const col = docStatusColor(s)
+            return (
+              <div key={i}
+                onClick={() => cycleDocStatus(i)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                  background: C.bg,
+                  border: `1px solid ${s === 'listo' ? 'rgba(34,197,94,.35)' : s === 'en_tramite' ? 'rgba(245,158,11,.35)' : 'rgba(239,68,68,.25)'}`,
+                  borderRadius: 6, cursor: 'pointer', transition: 'all 160ms',
+                }}>
+                {/* Status icon */}
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  border: `2px solid ${col}`,
+                  background: s === 'listo' ? 'rgba(34,197,94,.15)' : s === 'en_tramite' ? 'rgba(245,158,11,.12)' : 'rgba(239,68,68,.1)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 160ms',
+                }}>
+                  {s === 'listo' && (
+                    <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                      <polyline points="2,6 5,9 10,3" stroke={col} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                  {s === 'en_tramite' && (
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="2.5" strokeLinecap="round">
+                      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                  )}
+                  {s === 'pendiente' && (
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                  )}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: s !== 'pendiente' ? C.text : C.textSec, marginBottom: 1 }}>
+                    {doc.nombre}
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 8, fontWeight: 700, letterSpacing: '.08em',
+                  color: col, background: 'transparent',
+                  border: `1px solid ${col}`, borderRadius: 3, padding: '2px 6px',
+                  flexShrink: 0,
+                }}>{docStatusLabel(s)}</span>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 500, color: docs[i] ? C.text : C.textSec, marginBottom: 1 }}>
-                  {doc.nombre}
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── CALCULADORA AIU ── */}
+      {tab === 'aiu' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 2 }}>
+            Valor estimado de propuesta económica
+          </div>
+
+          {/* Costos directos */}
+          <div>
+            <div style={{ fontSize: 10, color: C.textSec, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+              Costos directos (materiales, mano de obra, equipos)
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: C.textSec, fontWeight: 600, fontSize: 13 }}>$</span>
+              <input
+                type="text"
+                value={costosDirectos}
+                onChange={e => setCostosDirectos(e.target.value.replace(/[^0-9.,]/g, ''))}
+                placeholder="Ej: 3500000000"
+                style={{
+                  flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4,
+                  padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none',
+                }}
+              />
+              <span style={{ color: C.textSec, fontSize: 11 }}>COP</span>
+            </div>
+          </div>
+
+          {/* AIU percentages */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            {([
+              ['Admin. %', adminPct, setAdminPct, '10-15%'],
+              ['Imprev. %', imprevPct, setImprevPct, '1-5%'],
+              ['Utilidad %', utilPct, setUtilPct, '5-8%'],
+            ] as const).map(([label, val, setter, hint]) => (
+              <div key={label}>
+                <div style={{ fontSize: 9, color: C.textSec, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                  {label}
                 </div>
-                <div style={{ fontSize: 9, color: docs[i] ? C.orange : C.textSec, letterSpacing: '.05em', textTransform: 'uppercase' }}>
-                  {doc.estado}
-                </div>
+                <input
+                  type="number"
+                  value={val}
+                  onChange={e => setter(e.target.value)}
+                  min="0" max="100"
+                  style={{
+                    width: '100%', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4,
+                    padding: '7px 8px', color: C.text, fontSize: 13, outline: 'none', textAlign: 'center',
+                  }}
+                />
+                <div style={{ fontSize: 8, color: C.textSec, textAlign: 'center', marginTop: 2 }}>{hint}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Resultados — solo si hay costos directos */}
+          {cd > 0 && (
+            <div style={{
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '12px 14px',
+              display: 'flex', flexDirection: 'column', gap: 8,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: C.textSec }}>Subtotal costos directos</span>
+                <span style={{ color: C.text, fontWeight: 600 }}>{fmtMillones(cd)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: C.textSec }}>Administración ({adminPct}%)</span>
+                <span style={{ color: C.text, fontWeight: 600 }}>{fmtMillones(adminVal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: C.textSec }}>Imprevistos ({imprevPct}%)</span>
+                <span style={{ color: C.text, fontWeight: 600 }}>{fmtMillones(imprevVal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: C.textSec }}>Utilidad ({utilPct}%)</span>
+                <span style={{ color: C.text, fontWeight: 600 }}>{fmtMillones(utilVal)}</span>
+              </div>
+              <div style={{ height: 1, background: C.border }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 10, color: C.orange, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                  Valor AIU
+                </span>
+                <span style={{ fontSize: 12, color: C.text, fontWeight: 700 }}>{fmtMillones(aiuTotal)}</span>
+              </div>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                background: 'rgba(249,115,22,.08)', borderRadius: 4, padding: '8px 10px',
+                margin: '4px -6px -4px',
+              }}>
+                <span style={{ fontSize: 12, color: C.orange, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                  TOTAL PROPUESTA
+                </span>
+                <span style={{ fontSize: 22, fontWeight: 800, color: C.orange, letterSpacing: '-0.5px', lineHeight: 1 }}>
+                  {fmtMillones(propuestaTotal)}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                fontSize: 11, marginTop: 4,
+              }}>
+                <span style={{ color: C.textSec }}>vs. presupuesto oficial ({fmtMillones(presupuestoOficial)})</span>
+                <span style={{
+                  fontWeight: 700, fontSize: 13,
+                  color: pctSobrePresupuesto <= 95 ? C.green : pctSobrePresupuesto > 100 ? C.red : '#f59e0b',
+                }}>
+                  {pctSobrePresupuesto.toFixed(1)}%
+                </span>
+              </div>
+              <div style={{
+                height: 4, background: C.border, borderRadius: 2, overflow: 'hidden', marginTop: 2,
+              }}>
+                <div style={{
+                  width: `${Math.min(pctSobrePresupuesto, 120)}%`, height: '100%', borderRadius: 2,
+                  background: pctSobrePresupuesto <= 95 ? C.green : pctSobrePresupuesto > 100 ? C.red : '#f59e0b',
+                  transition: 'width 300ms ease',
+                }} />
+              </div>
+              <div style={{ fontSize: 9, color: pctSobrePresupuesto <= 95 ? C.green : pctSobrePresupuesto > 100 ? C.red : '#f59e0b', fontWeight: 600, textAlign: 'center' }}>
+                {pctSobrePresupuesto <= 95 ? '✓ Dentro del rango óptimo' : pctSobrePresupuesto > 100 ? '⚠ Excede el presupuesto oficial' : '⚡ Cercano al límite'}
               </div>
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -662,7 +867,6 @@ function ProposalTracker({ proceso }: { proceso: typeof PROCESOS[0] | null }) {
             const isCurrent = !e.done && (i === 0 || ETAPAS_SECOP[i - 1].done)
             return (
               <div key={i} style={{ display: 'flex', gap: 12, position: 'relative' }}>
-                {/* línea vertical */}
                 {!isLast && (
                   <div style={{
                     position: 'absolute', left: 9, top: 20, bottom: -6, width: 1,
@@ -670,7 +874,6 @@ function ProposalTracker({ proceso }: { proceso: typeof PROCESOS[0] | null }) {
                     zIndex: 0,
                   }} />
                 )}
-                {/* nodo */}
                 <div style={{
                   width: 20, height: 20, borderRadius: '50%', flexShrink: 0, zIndex: 1, marginTop: 1,
                   background: e.done ? C.orange : isCurrent ? 'rgba(249,115,22,.15)' : C.bg,
@@ -686,7 +889,6 @@ function ProposalTracker({ proceso }: { proceso: typeof PROCESOS[0] | null }) {
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.orange }} />
                   )}
                 </div>
-                {/* texto */}
                 <div style={{ paddingBottom: isLast ? 0 : 18, flex: 1 }}>
                   <div style={{ fontSize: 12, fontWeight: isCurrent ? 600 : 400, color: e.done ? C.textSec : isCurrent ? C.text : C.textSec, lineHeight: 1.3 }}>
                     {e.label}
@@ -700,24 +902,6 @@ function ProposalTracker({ proceso }: { proceso: typeof PROCESOS[0] | null }) {
           })}
         </div>
       )}
-
-      <div style={{ height: 1, background: C.border, margin: '18px 0 14px' }} />
-
-      {/* ── Botón ── */}
-      <button
-        onMouseEnter={e => (e.currentTarget.style.background = C.orangeH)}
-        onMouseLeave={e => (e.currentTarget.style.background = C.orange)}
-        style={{
-          width: '100%', padding: '13px', borderRadius: 6, border: 'none',
-          background: C.orange, color: '#fff', fontSize: 14, fontWeight: 700,
-          cursor: 'pointer', letterSpacing: '.05em', textTransform: 'uppercase',
-          transition: 'background 180ms',
-        }}>
-        Calcular Propuesta
-      </button>
-      <div style={{ textAlign: 'center', marginTop: 9, fontSize: 9, color: C.textSec, letterSpacing: '.1em', textTransform: 'uppercase' }}>
-        Evaluación de riesgo automatizada con IA
-      </div>
     </div>
   )
 }
@@ -775,7 +959,7 @@ export default function Dashboard() {
   })
 
   const activeProceso = PROCESOS.find(p => p.id === activeId) ?? null
-  const urgentes = PROCESOS.filter(p => new Date(p.cierre).getTime() - Date.now() < 86400000 * 2).length
+  const urgentes = PROCESOS.filter(p => new Date(p.cierre).getTime() - Date.now() < 86400000).length
 
   const METRICAS = [
     {
@@ -789,7 +973,7 @@ export default function Dashboard() {
       urgent: false,
     },
     {
-      label: 'CIERRES URGENTES', val: `${urgentes}`, detail: 'Cierre en menos de 48h',
+      label: 'CIERRES URGENTES', val: `${urgentes}`, detail: 'Cierre en menos de 24h',
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
       urgent: true,
     },
