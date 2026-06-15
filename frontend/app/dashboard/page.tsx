@@ -20,68 +20,74 @@ const C: typeof DARK = { ...DARK }
 function useTheme() { return C }
 
 /* ─── Datos ───────────────────────────────── */
-const PROCESOS = [
-  {
-    id: 1, score: 94,
-    entidad: 'Alcaldía de Bogotá',
-    idProceso: 'SECOP-2026-INF-089',
-    sector: 'Infrastructure',
-    objeto: 'Construcción y rehabilitación de malla vial local en las localidades de Kennedy, Bosa y Ciudad Bolívar — Grupo 3',
-    presupuesto: 1200000000,
-    cierre: new Date(Date.now() + 1.5 * 86400000).toISOString(),
-    docs: 12,
-  },
-  {
-    id: 2, score: 88,
-    entidad: 'Min. Vivienda',
-    idProceso: 'SECOP-2026-AGU-112',
-    sector: 'Infrastructure',
-    objeto: 'Suministro e instalación de sistemas de potabilización para comunidades rurales en el departamento de Chocó',
-    presupuesto: 850000000,
-    cierre: new Date(Date.now() + 12 * 86400000).toISOString(),
-    docs: 9,
-  },
-  {
-    id: 3, score: 82,
-    entidad: 'Metro de Medellín',
-    idProceso: 'MET-2026-TR-004',
-    sector: 'Tech Services',
-    objeto: 'Consultoría para la expansión de la línea A del sistema masivo de transporte, estudios de prefactibilidad y diseños de detalle',
-    presupuesto: 3400000000,
-    cierre: new Date(Date.now() + 18 * 86400000).toISOString(),
-    docs: 11,
-  },
-  {
-    id: 4, score: 91,
-    entidad: 'Gobernación Valle',
-    idProceso: 'GVAL-CIV-202',
-    sector: 'Infrastructure',
-    objeto: 'Construcción de centros de desarrollo infantil en tres municipios no certificados del departamento del Valle del Cauca',
-    presupuesto: 8400000000,
-    cierre: new Date(Date.now() + 4 * 86400000).toISOString(),
-    docs: 14,
-  },
-  {
-    id: 5, score: 76,
-    entidad: 'INVIAS',
-    idProceso: 'INVIAS-LP-2026-117',
-    sector: 'Infrastructure',
-    objeto: 'Rehabilitación de la carretera Bogotá–Villeta, sector La Vega–Villeta, corredor nacional Ruta 50',
-    presupuesto: 5200000000,
-    cierre: new Date(Date.now() + 22 * 86400000).toISOString(),
-    docs: 10,
-  },
-  {
-    id: 6, score: 69,
-    entidad: 'MinTIC',
-    idProceso: 'CTIC-2026-DIG-031',
-    sector: 'Tech Services',
-    objeto: 'Implementación de infraestructura de conectividad en zonas rurales y municipios PDET — fase III',
-    presupuesto: 1900000000,
-    cierre: new Date(Date.now() + 30 * 86400000).toISOString(),
-    docs: 7,
-  },
+
+interface ProcesoData {
+  id: number
+  entidad: string
+  idProceso: string
+  departamento: string
+  unspsc: string
+  unspscLabel: string
+  sector: string
+  objeto: string
+  presupuesto: number
+  cierre: string
+  docs: number
+  // Calculados dinámicamente
+  score?: number
+  matchDepto?: boolean
+  matchUNSPSC?: boolean
+  matchPresupuesto?: boolean
+  matchVigencia?: boolean
+}
+
+const PROCESOS: ProcesoData[] = [
+  { id: 1,  entidad: 'Alcaldía de Bogotá',          idProceso: 'SECOP-2026-INF-089',   departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Construcción y rehabilitación de malla vial local en las localidades de Kennedy, Bosa y Ciudad Bolívar — Grupo 3',                         presupuesto: 1200000000,  cierre: new Date(Date.now() + 1.5  * 86400000).toISOString(), docs: 12 },
+  { id: 2,  entidad: 'INVIAS',                       idProceso: 'INVIAS-LP-2026-117',    departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Rehabilitación de la carretera Bogotá–Villeta, sector La Vega–Villeta, corredor nacional Ruta 50',                                            presupuesto: 5200000000,  cierre: new Date(Date.now() + 22   * 86400000).toISOString(), docs: 10 },
+  { id: 3,  entidad: 'Gobernación de Boyacá',        idProceso: 'BOY-LP-2026-042',       departamento: 'BOYACÁ',            unspsc: '72120000', unspscLabel: 'Edificación',     sector: 'Infrastructure',  objeto: 'Construcción de 12 sedes educativas rurales en municipios no certificados del departamento de Boyacá — Fase II',                                   presupuesto: 3800000000,  cierre: new Date(Date.now() + 30   * 86400000).toISOString(), docs: 15 },
+  { id: 4,  entidad: 'Alcaldía de Villavicencio',    idProceso: 'VCIO-LP-2026-018',      departamento: 'META',              unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Mejoramiento y pavimentación de vías terciarias en los corregimientos de Apiay, Pompeya y La Concepción',                                           presupuesto: 2100000000,  cierre: new Date(Date.now() + 14   * 86400000).toISOString(), docs: 8 },
+  { id: 5,  entidad: 'Gobernación de Cundinamarca',  idProceso: 'CUN-LP-2026-076',       departamento: 'CUNDINAMARCA',      unspsc: '72120000', unspscLabel: 'Edificación',     sector: 'Infrastructure',  objeto: 'Construcción del nuevo hospital regional de segundo nivel en Fusagasugá — incluye dotación biomédica',                                          presupuesto: 8400000000,  cierre: new Date(Date.now() + 5    * 86400000).toISOString(), docs: 18 },
+  { id: 6,  entidad: 'Gobernación del Valle',        idProceso: 'GVAL-CIV-2026-091',     departamento: 'VALLE DEL CAUCA',   unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Construcción de centros de desarrollo infantil en tres municipios no certificados del departamento del Valle del Cauca',                         presupuesto: 4500000000,  cierre: new Date(Date.now() + 18   * 86400000).toISOString(), docs: 14 },
+  { id: 7,  entidad: 'Ministerio de Vivienda',       idProceso: 'MINV-AGU-2026-112',     departamento: 'CHOCÓ',             unspsc: '72120000', unspscLabel: 'Edificación',     sector: 'Infrastructure',  objeto: 'Suministro e instalación de sistemas de potabilización para comunidades rurales en el departamento de Chocó',                                     presupuesto: 850000000,   cierre: new Date(Date.now() + 28   * 86400000).toISOString(), docs: 9 },
+  { id: 8,  entidad: 'Metro de Medellín',            idProceso: 'MET-2026-TR-004',       departamento: 'ANTIOQUIA',         unspsc: '81100000', unspscLabel: 'Consultoría',     sector: 'Tech Services',    objeto: 'Consultoría para la expansión de la línea A del sistema masivo de transporte — estudios de prefactibilidad y diseños de detalle',               presupuesto: 3400000000,  cierre: new Date(Date.now() + 45   * 86400000).toISOString(), docs: 11 },
+  { id: 9,  entidad: 'MinTIC',                       idProceso: 'CTIC-2026-DIG-031',     departamento: 'BOGOTÁ D.C.',       unspsc: '81100000', unspscLabel: 'Consultoría',     sector: 'Tech Services',    objeto: 'Implementación de infraestructura de conectividad digital en zonas rurales y municipios PDET — fase III',                                        presupuesto: 1900000000,  cierre: new Date(Date.now() + 35   * 86400000).toISOString(), docs: 7 },
+  { id: 10, entidad: 'INVIAS',                       idProceso: 'INVIAS-MET-2026-088',   departamento: 'META',              unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Construcción de la segunda calzada Villavicencio–Puerto López, tramo 3 — obras de drenaje y estabilización de taludes',                         presupuesto: 12000000000, cierre: new Date(Date.now() + 25   * 86400000).toISOString(), docs: 16 },
+  { id: 11, entidad: 'Gobernación del Meta',         idProceso: 'META-LP-2026-055',      departamento: 'META',              unspsc: '72120000', unspscLabel: 'Edificación',     sector: 'Infrastructure',  objeto: 'Construcción de vivienda de interés prioritario en los municipios de Granada, San Martín y Puerto Gaitán — 340 unidades',                      presupuesto: 6200000000,  cierre: new Date(Date.now() + 20   * 86400000).toISOString(), docs: 13 },
+  { id: 12, entidad: 'Alcaldía de Tunja',            idProceso: 'TUN-LP-2026-029',       departamento: 'BOYACÁ',            unspsc: '72150000', unspscLabel: 'Mantenimiento',   sector: 'Infrastructure',  objeto: 'Mantenimiento correctivo y preventivo de la red vial urbana del municipio de Tunja — incluye señalización horizontal y vertical',              presupuesto: 400000000,   cierre: new Date(Date.now() + 10   * 86400000).toISOString(), docs: 6 },
+  { id: 13, entidad: 'IDU Bogotá',                   idProceso: 'IDU-LP-2026-141',       departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Construcción del intercambiador vial Avenida Boyacá con Calle 13 — puentes vehiculares y deprimidos — lote 2',                                presupuesto: 9800000000,  cierre: new Date(Date.now() + 35   * 86400000).toISOString(), docs: 20 },
+  { id: 14, entidad: 'Fondo Adaptación',             idProceso: 'FAD-LP-2026-063',       departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Obras de protección y mitigación del riesgo por inundación en la cuenca baja del río Bogotá — municipios de Sibaté y Soacha',                  presupuesto: 15500000000, cierre: new Date(Date.now() + 40   * 86400000).toISOString(), docs: 17 },
 ]
+
+const CLIENTE_DEMO = {
+  nombre: 'Constructora Andes SAS',
+  nit: '901.234.567-8',
+  email: 'licitaciones@constructorandes.com',
+  departamentos: ['CUNDINAMARCA', 'BOYACÁ', 'META'],
+  unspsc_codes: ['72140000', '72120000'],
+  unspsc_labels: ['Infraestructura pública', 'Edificación'],
+  presupuesto_min: 500000000,
+  presupuesto_max: 15000000000,
+}
+
+function calcularCompatibilidad(p: ProcesoData): ProcesoData {
+  const c = CLIENTE_DEMO
+  const matchDepto = c.departamentos.some(d => p.departamento.toUpperCase().includes(d.toUpperCase()))
+  const matchUNSPSC = c.unspsc_codes.some(u => p.unspsc.startsWith(u.slice(0, 4)))
+  const matchPresupuesto = p.presupuesto >= c.presupuesto_min && p.presupuesto <= c.presupuesto_max
+  const diasRestantes = (new Date(p.cierre).getTime() - Date.now()) / 86400000
+  const matchVigencia = diasRestantes > 15
+
+  let score = 0
+  if (matchDepto) score += 30
+  if (matchUNSPSC) score += 30
+  if (matchPresupuesto) score += 25
+  if (matchVigencia) score += 15
+
+  return { ...p, score, matchDepto, matchUNSPSC, matchPresupuesto, matchVigencia }
+}
+
+// Procesos evaluados contra el cliente demo
+const PROCESOS_COMPATIBLES = PROCESOS.map(calcularCompatibilidad).sort((a, b) => (b.score || 0) - (a.score || 0))
 
 type DocStatus = 'listo' | 'en_tramite' | 'pendiente'
 const DOCS_SECOP: { nombre: string; estado: string; status: DocStatus }[] = [
@@ -427,13 +433,21 @@ function CountdownCell({ iso }: { iso: string }) {
 }
 
 /* ─── Card de proceso — alto impacto ─────── */
-function ProcesoCard({ p, onClick, active }: { p: typeof PROCESOS[0]; onClick: () => void; active: boolean }) {
+function ProcesoCard({ p, onClick, active }: { p: ProcesoData; onClick: () => void; active: boolean }) {
   const C = useTheme()
   const [hov, setHov] = useState(false)
   const diff = new Date(p.cierre).getTime() - Date.now()
   const urgent = diff < 86400000
-  const scoreCol = p.score >= 80 ? C.orange : p.score >= 60 ? '#facc15' : C.red
+  const s = p.score || 0
+  const scoreCol = s >= 70 ? C.orange : s >= 40 ? '#facc15' : C.red
   const accentCol = urgent ? C.red : active ? C.orange : hov ? C.orange : C.border
+
+  const matchBadges = [
+    { label: 'Depto',  ok: p.matchDepto,                                          color: C.green },
+    { label: 'UNSPSC', ok: p.matchUNSPSC,                                         color: C.green },
+    { label: 'COP',    ok: p.matchPresupuesto,                                    color: C.green },
+    { label: 'Plazo',  ok: p.matchVigencia,                                       color: C.green },
+  ]
 
   return (
     <div onClick={onClick}
@@ -483,18 +497,30 @@ function ProcesoCard({ p, onClick, active }: { p: typeof PROCESOS[0]; onClick: (
                 <circle cx={30} cy={30} r={25} fill="none" stroke={scoreCol} strokeWidth={3}
                   strokeLinecap="round"
                   strokeDasharray={2 * Math.PI * 25}
-                  strokeDashoffset={2 * Math.PI * 25 * (1 - p.score / 100)}
+                  strokeDashoffset={2 * Math.PI * 25 * (1 - s / 100)}
                   className="score-arc"
-                  style={{ '--circ': 2 * Math.PI * 25, '--target': 2 * Math.PI * 25 * (1 - p.score / 100) } as React.CSSProperties}
+                  style={{ '--circ': 2 * Math.PI * 25, '--target': 2 * Math.PI * 25 * (1 - s / 100) } as React.CSSProperties}
                 />
               </svg>
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontWeight: 800, fontSize: 15, color: scoreCol, lineHeight: 1 }}>{p.score}</span>
+                <span style={{ fontWeight: 800, fontSize: 15, color: scoreCol, lineHeight: 1 }}>{s}</span>
                 <span style={{ fontSize: 8, color: scoreCol, fontWeight: 600 }}>%</span>
               </div>
             </div>
-            <div style={{ fontSize: 8, color: scoreCol, fontWeight: 700, letterSpacing: '.06em', marginTop: 2 }}>
-              {p.score >= 80 ? 'ALTO' : p.score >= 60 ? 'MEDIO' : 'BAJO'}
+            <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 4 }}>
+              {matchBadges.map((b, bi) => (
+                <div key={bi} title={b.ok ? `${b.label}: Cumple` : `${b.label}: No cumple`} style={{
+                  width: 16, height: 16, borderRadius: 3, fontSize: 7, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: b.ok ? `${b.color}22` : 'transparent',
+                  border: `1px solid ${b.ok ? b.color : C.border}`,
+                  color: b.ok ? b.color : C.textSec,
+                  cursor: 'default',
+                }}>{b.label[0]}</div>
+              ))}
+            </div>
+            <div style={{ fontSize: 8, color: scoreCol, fontWeight: 700, letterSpacing: '.06em', marginTop: 3 }}>
+              {s >= 70 ? 'ALTA' : s >= 40 ? 'MEDIA' : 'BAJA'}
             </div>
           </div>
         </div>
@@ -544,7 +570,7 @@ function ProcesoCard({ p, onClick, active }: { p: typeof PROCESOS[0]; onClick: (
 }
 
 /* ─── Panel Seguimiento de Propuesta ─────── */
-function ProposalTracker({ proceso }: { proceso: typeof PROCESOS[0] | null }) {
+function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
   const C = useTheme()
   const [docStatuses, setDocStatuses] = useState<DocStatus[]>(DOCS_SECOP.map(d => d.status))
   const [tab, setTab] = useState<'docs' | 'aiu' | 'etapas'>('docs')
@@ -941,34 +967,38 @@ export default function Dashboard() {
     r.setProperty('--t-herobg',  p.heroBg)
     r.setProperty('--t-card2',   p.cardHover)
   }, [theme])
-  const [filtro, setFiltro] = useState('Infraestructura')
+  const [filtro, setFiltro] = useState('Todos')
   const [busq, setBusq] = useState('')
   const [activeId, setActiveId] = useState<number | null>(1)
 
   const [panelOpen, setPanelOpen] = useState(true)
-  const cTotal = useCounter(142)
-  const cBudget = useCounter(48)
+  const cTotal = useCounter(PROCESOS_COMPATIBLES.length)
+  const presupuestoTotal = PROCESOS_COMPATIBLES.reduce((a, p) => a + p.presupuesto, 0)
+  const cBudget = useCounter(Math.round(presupuestoTotal / 1_000_000_000))
 
-  const filtros = ['Infraestructura', 'Servicios TI', 'Todos los sectores']
+  const filtros = ['Todos', 'Alta compat.', 'Media compat.', 'Cierre urgente']
 
-  const procesados = PROCESOS.filter(p => {
-    const sectorMap: Record<string,string> = { 'Infraestructura': 'Infrastructure', 'Servicios TI': 'Tech Services' }
-    if (filtro !== 'Todos los sectores' && p.sector !== sectorMap[filtro]) return false
+  const procesados = PROCESOS_COMPATIBLES.filter(p => {
+    if (filtro === 'Alta compat.' && (p.score || 0) < 70) return false
+    if (filtro === 'Media compat.' && ((p.score || 0) < 40 || (p.score || 0) >= 70)) return false
+    if (filtro === 'Cierre urgente' && new Date(p.cierre).getTime() - Date.now() >= 86400000) return false
     if (busq && !p.entidad.toLowerCase().includes(busq.toLowerCase()) && !p.objeto.toLowerCase().includes(busq.toLowerCase())) return false
     return true
   })
 
-  const activeProceso = PROCESOS.find(p => p.id === activeId) ?? null
-  const urgentes = PROCESOS.filter(p => new Date(p.cierre).getTime() - Date.now() < 86400000).length
+  const activeProceso = PROCESOS_COMPATIBLES.find(p => p.id === activeId) ?? null
+  const urgentes = PROCESOS_COMPATIBLES.filter(p => new Date(p.cierre).getTime() - Date.now() < 86400000).length
+
+  const altaCompat = PROCESOS_COMPATIBLES.filter(p => (p.score || 0) >= 70).length
 
   const METRICAS = [
     {
-      label: 'OPORTUNIDADES HOY', val: `${cTotal}`, detail: '+12% vs ayer',
+      label: 'OPORTUNIDADES HOY', val: `${cTotal}`, detail: 'Procesos encontrados',
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>,
       urgent: false,
     },
     {
-      label: 'PRESUPUESTO TOTAL (COP)', val: `$${cBudget}.8T`, detail: 'Valor agregado',
+      label: 'PRESUPUESTO AGREGADO (COP)', val: `$${cBudget}B`, detail: 'Suma de procesos',
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>,
       urgent: false,
     },
@@ -978,7 +1008,7 @@ export default function Dashboard() {
       urgent: true,
     },
     {
-      label: 'COMPATIBILIDAD ALTA', val: `${PROCESOS.filter(p => p.score >= 80).length * 13}%`, detail: 'Verificado por IA',
+      label: 'ALTA COMPATIBILIDAD', val: `${altaCompat}`, detail: 'Score ≥ 70%, listos para proponer',
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       urgent: false,
     },
@@ -1058,9 +1088,38 @@ export default function Dashboard() {
           }}>
             <Particles />
             {/* Título */}
-            <div style={{ position: 'relative', zIndex: 1, marginBottom: 20 }}>
+            <div style={{ position: 'relative', zIndex: 1, marginBottom: 14 }}>
               <h1 style={{ fontSize: 34, fontWeight: 700, color: C.text, lineHeight: 1, marginBottom: 6 }}>Control de Licitaciones</h1>
               <p style={{ fontSize: 13, color: C.textSec }}>Monitoreo automatizado de contratación pública en SECOP II — Colombia.</p>
+            </div>
+
+            {/* ─ Cliente Demo ─ */}
+            <div style={{ position: 'relative', zIndex: 1, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 14, background: `${C.card}aa`, backdropFilter: 'blur(6px)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px' }}>
+              <div style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(249,115,22,.18)', border: `1px solid rgba(249,115,22,.3)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: C.orange }}>{CLIENTE_DEMO.nombre.charAt(0)}</span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 3 }}>{CLIENTE_DEMO.nombre}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {CLIENTE_DEMO.departamentos.map(d => (
+                    <span key={d} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(34,197,94,.15)', color: C.green, fontWeight: 500 }}>
+                      {d}
+                    </span>
+                  ))}
+                  {CLIENTE_DEMO.unspsc_labels.map(l => (
+                    <span key={l} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(59,130,246,.15)', color: '#3b82f6', fontWeight: 500 }}>
+                      {l}
+                    </span>
+                  ))}
+                  <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(249,115,22,.15)', color: C.orange, fontWeight: 500 }}>
+                    ${(CLIENTE_DEMO.presupuesto_min / 1_000_000).toFixed(0)}M – ${(CLIENTE_DEMO.presupuesto_max / 1_000_000_000).toFixed(1)}B
+                  </span>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.08em', textTransform: 'uppercase' }}>Perfil activo</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.orange }}>{PROCESOS_COMPATIBLES.filter(p => (p.score || 0) >= 70).length} matches</div>
+              </div>
             </div>
 
             {/* ─ Métricas ─ */}
