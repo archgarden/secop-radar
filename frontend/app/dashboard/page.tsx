@@ -213,12 +213,12 @@ function Particles() {
         nodeSet.add(`${s.x1},${s.y1}`)
         nodeSet.add(`${s.x2},${s.y2}`)
       }
-      for (const key of nodeSet) {
+      nodeSet.forEach(key => {
         if (Math.random() < 0.35) {
           const [x, y] = key.split(',').map(Number)
           nodes.push({ x, y, r: Math.random() < 0.2 ? 3 : 1.5 })
         }
-      }
+      })
     }
 
     init()

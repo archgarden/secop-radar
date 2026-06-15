@@ -93,18 +93,21 @@ export default function NuevoCliente() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <nav style={{
+        background: 'var(--header)',
         borderBottom: '1px solid var(--border)',
-        padding: '0 24px',
+        padding: '0 28px',
         display: 'flex',
         alignItems: 'center',
-        height: 52,
-        gap: 32,
+        height: 56,
+        gap: 28,
+        boxShadow: '0 2px 20px rgba(0,0,0,.5)',
       }}>
-        <span style={{ color: 'var(--blue)', fontWeight: 700, fontSize: 15, letterSpacing: 0.3 }}>
-          SECOP Radar
+        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--orange)', flexShrink: 0 }} className="pulse-status" />
+        <span style={{ color: 'var(--text)', fontWeight: 700, fontSize: 15, letterSpacing: '3px', textTransform: 'uppercase' }}>
+          SECOP RADAR
         </span>
         <Link href="/dashboard" style={{ color: 'var(--text-sec)', fontSize: 13 }}>Dashboard</Link>
-        <span style={{ color: 'var(--text)', fontSize: 13 }}>+ Cliente</span>
+        <Link href="/clientes/nuevo" style={{ color: 'var(--orange)', fontSize: 13, fontWeight: 600 }}>+ Cliente</Link>
       </nav>
 
       <main style={{ maxWidth: 640, margin: '0 auto', padding: '32px 24px' }}>
@@ -173,9 +176,9 @@ export default function NuevoCliente() {
                         borderRadius: 3,
                         fontSize: 12,
                         cursor: 'pointer',
-                        border: sel ? '1px solid var(--blue)' : '1px solid var(--border)',
+                        border: sel ? '1px solid var(--orange)' : '1px solid var(--border)',
                         background: sel ? 'rgba(59,130,246,0.15)' : 'var(--bg)',
-                        color: sel ? 'var(--blue)' : 'var(--text-sec)',
+                        color: sel ? 'var(--orange)' : 'var(--text-sec)',
                         fontWeight: sel ? 600 : 400,
                       }}
                     >
@@ -200,9 +203,9 @@ export default function NuevoCliente() {
                         borderRadius: 4,
                         fontSize: 13,
                         cursor: 'pointer',
-                        border: sel ? '1px solid var(--blue)' : '1px solid var(--border)',
+                        border: sel ? '1px solid var(--orange)' : '1px solid var(--border)',
                         background: sel ? 'rgba(59,130,246,0.1)' : 'var(--bg)',
-                        color: sel ? 'var(--blue)' : 'var(--text)',
+                        color: sel ? 'var(--orange)' : 'var(--text)',
                         textAlign: 'left',
                         display: 'flex',
                         alignItems: 'center',
@@ -215,7 +218,7 @@ export default function NuevoCliente() {
                         fontWeight: 700,
                         fontSize: 12,
                       }}>{op.code}</span>
-                      <span style={{ color: sel ? 'var(--blue)' : 'var(--text-sec)', fontSize: 12 }}>{op.label}</span>
+                      <span style={{ color: sel ? 'var(--orange)' : 'var(--text-sec)', fontSize: 12 }}>{op.label}</span>
                     </button>
                   )
                 })}
@@ -242,7 +245,7 @@ export default function NuevoCliente() {
               type="submit"
               disabled={loading}
               style={{
-                background: loading ? 'var(--border)' : 'var(--blue)',
+                background: loading ? 'var(--border)' : 'var(--orange)',
                 color: '#fff',
                 border: 'none',
                 padding: '9px 24px',

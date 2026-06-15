@@ -70,18 +70,21 @@ export default function ProcesosCliente() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <nav style={{
+        background: 'var(--header)',
         borderBottom: '1px solid var(--border)',
-        padding: '0 24px',
+        padding: '0 28px',
         display: 'flex',
         alignItems: 'center',
-        height: 52,
-        gap: 32,
+        height: 56,
+        gap: 28,
+        boxShadow: '0 2px 20px rgba(0,0,0,.5)',
       }}>
-        <span style={{ color: 'var(--blue)', fontWeight: 700, fontSize: 15, letterSpacing: 0.3 }}>
-          SECOP Radar
+        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--orange)', flexShrink: 0 }} className="pulse-status" />
+        <span style={{ color: 'var(--text)', fontWeight: 700, fontSize: 15, letterSpacing: '3px', textTransform: 'uppercase' }}>
+          SECOP RADAR
         </span>
         <Link href="/dashboard" style={{ color: 'var(--text-sec)', fontSize: 13 }}>Dashboard</Link>
-        <span style={{ color: 'var(--text)', fontSize: 13 }}>Procesos compatibles</span>
+        <span style={{ color: 'var(--orange)', fontSize: 13, fontWeight: 600 }}>Procesos compatibles</span>
       </nav>
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 24px' }}>
@@ -96,7 +99,7 @@ export default function ProcesosCliente() {
             onClick={correrRadar}
             disabled={radarLoading}
             style={{
-              background: radarLoading ? 'var(--border)' : 'var(--blue)',
+              background: radarLoading ? 'var(--border)' : 'var(--orange)',
               color: '#fff',
               border: 'none',
               padding: '8px 18px',
@@ -243,7 +246,7 @@ export default function ProcesosCliente() {
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
-                            color: 'var(--blue)',
+                            color: 'var(--orange)',
                             fontSize: 12,
                             border: '1px solid rgba(59,130,246,0.3)',
                             padding: '3px 10px',
