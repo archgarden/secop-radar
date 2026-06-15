@@ -7,16 +7,18 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:       #f4f2ee;
-  --surface:  #ffffff;
-  --border:   #ddd9d3;
-  --text:     #1a1714;
-  --text-sec: #6b6560;
-  --blue:     #1e3a5f;
-  --green:    #15803d;
-  --red:      #c0392b;
-  --yellow:   #b45309;
-  --orange:   #e8601c;
+  --bg:       #0f1117;
+  --card:     #1a1d27;
+  --surface:  #1a1d27;
+  --border:   #2a2d3a;
+  --text:     #f1f5f9;
+  --text-sec: #64748b;
+  --orange:   #f97316;
+  --blue:     #3b82f6;
+  --green:    #22c55e;
+  --red:      #ef4444;
+  --yellow:   #f59e0b;
+  --header:   #0a0d14;
 }
 
 html, body { height: 100%; }
@@ -36,33 +38,20 @@ input  { font-family: inherit; }
 
 /* ── Animaciones ── */
 
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1;   transform: scale(1); }
-  50%       { opacity: 0.3; transform: scale(0.75); }
-}
-
-/* Pulse suave para el punto de estado del header */
 @keyframes pulse-status {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(232,96,28,0.6); transform: scale(1); }
-  50%       { box-shadow: 0 0 0 5px rgba(232,96,28,0);  transform: scale(1.1); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.7); transform: scale(1); }
+  50%       { box-shadow: 0 0 0 5px rgba(249,115,22,0); transform: scale(1.15); }
 }
 
-@keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Entrada escalonada de filas */
 @keyframes row-enter {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Línea de escaneo — una sola vez */
 @keyframes scan-sweep {
-  0%   { top: 0%;    opacity: 1; }
+  0%   { top: 0%;   opacity: 1; }
   85%  { opacity: 1; }
-  100% { top: 100%;  opacity: 0; }
+  100% { top: 100%; opacity: 0; }
 }
 
 @keyframes slide-in-right {
@@ -70,31 +59,18 @@ input  { font-family: inherit; }
   to   { transform: translateX(0);    opacity: 1; }
 }
 
-@keyframes ticker-scroll {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-
-/* Arc del score badge */
 @keyframes arc-fill {
   from { stroke-dashoffset: var(--circ); }
   to   { stroke-dashoffset: var(--target); }
 }
 
-.pulse-dot {
-  animation: pulse-dot 2s ease-in-out infinite;
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 
 .pulse-status {
-  animation: pulse-status 2.4s ease-in-out infinite;
-}
-
-.fade-in-up {
-  animation: fade-in-up 0.4s ease-out both;
-}
-
-.panel-slide-in {
-  animation: slide-in-right 0.3s ease-out both;
+  animation: pulse-status 2.2s ease-in-out infinite;
 }
 
 .row-enter {
@@ -102,10 +78,19 @@ input  { font-family: inherit; }
 }
 
 .score-arc {
-  animation: arc-fill 1s cubic-bezier(0.16,1,0.3,1) both;
+  animation: arc-fill 1.1s cubic-bezier(0.16,1,0.3,1) both;
 }
 
-/* ── Scrollbar ── */
+.panel-slide-in {
+  animation: slide-in-right 0.28s ease-out both;
+}
+
+/* ── Scrollbar oscuro ── */
 ::-webkit-scrollbar       { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3d4a; }
+
+/* ── Inputs ── */
+input::placeholder { color: var(--text-sec); }
+input:focus { border-color: var(--orange) !important; }

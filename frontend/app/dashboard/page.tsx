@@ -2,944 +2,994 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-/* ─────────────────────────────────────────────
-   DATOS DE EJEMPLO — 8 procesos reales Colombia
-───────────────────────────────────────────────*/
+/* ─── Paleta ─────────────────────────────── */
+const DARK = {
+  bg: '#0f1117', card: '#1a1d27', cardHover: '#1e2130',
+  border: '#2a2d3a', text: '#f1f5f9', textSec: '#64748b',
+  orange: '#f97316', orangeH: '#ea6c0a', green: '#22c55e',
+  red: '#ef4444', header: '#0a0d14', heroBg: '#141720',
+}
+const LIGHT = {
+  bg: '#f5f5f5', card: '#ffffff', cardHover: '#f0f0f0',
+  border: '#e2e2e2', text: '#111111', textSec: '#666666',
+  orange: '#f97316', orangeH: '#ea6c0a', green: '#16a34a',
+  red: '#dc2626', header: '#ffffff', heroBg: '#f5f5f5',
+}
+// Variable mutable que sub-componentes leen en cada render del padre
+const C: typeof DARK = { ...DARK }
+function useTheme() { return C }
+
+/* ─── Datos ───────────────────────────────── */
 const PROCESOS = [
   {
-    id: 1,
-    score: 94,
-    entidad: 'Instituto de Desarrollo Urbano',
-    departamento: 'Bogotá D.C.',
+    id: 1, score: 94,
+    entidad: 'Alcaldía de Bogotá',
+    idProceso: 'SECOP-2026-INF-089',
+    sector: 'Infrastructure',
     objeto: 'Construcción y rehabilitación de malla vial local en las localidades de Kennedy, Bosa y Ciudad Bolívar — Grupo 3',
-    presupuesto: 4836000000,
-    cierre: '2026-06-18',
-    numero: 'IDU-LP-2026-003',
-    url: 'https://www.secop.gov.co/',
-    unspsc: 'V1.72141100',
-    requisitos: [
-      { ok: true,  texto: 'Experiencia en obras viales' },
-      { ok: true,  texto: 'Capacidad financiera K>1.5' },
-      { ok: true,  texto: 'RUP vigente' },
-      { ok: false, texto: 'Certificado ISO 9001' },
-      { ok: false, texto: 'Ingeniero residente especializado' },
-    ],
-    documentos: ['Propuesta técnica','Propuesta económica','RUP','Estados financieros','Certificados de experiencia','Pólizas','Paz y salvo SENA','RIT'],
+    presupuesto: 1200000000,
+    cierre: new Date(Date.now() + 1.5 * 86400000).toISOString(),
+    docs: 12,
   },
   {
-    id: 2,
-    score: 87,
-    entidad: 'Alcaldía Municipal de Cajicá',
-    departamento: 'Cundinamarca',
-    objeto: 'Mejoramiento de la infraestructura educativa de la Institución Educativa Zipacón, sede principal — obras civiles y adecuaciones',
-    presupuesto: 2574439664,
-    cierre: '2026-06-22',
-    numero: 'CAJ-MC-2026-041',
-    url: 'https://www.secop.gov.co/',
-    unspsc: 'V1.72120000',
-    requisitos: [
-      { ok: true,  texto: 'Experiencia en edificación' },
-      { ok: true,  texto: 'Capacidad financiera K>1.2' },
-      { ok: true,  texto: 'RUP vigente' },
-      { ok: true,  texto: 'Ingeniero civil matriculado' },
-      { ok: false, texto: 'Certificación RETIE' },
-    ],
-    documentos: ['Propuesta técnica','Propuesta económica','RUP','Estados financieros','Certificados de experiencia','Pólizas','Paz y salvo SENA','RIT'],
+    id: 2, score: 88,
+    entidad: 'Min. Vivienda',
+    idProceso: 'SECOP-2026-AGU-112',
+    sector: 'Infrastructure',
+    objeto: 'Suministro e instalación de sistemas de potabilización para comunidades rurales en el departamento de Chocó',
+    presupuesto: 850000000,
+    cierre: new Date(Date.now() + 12 * 86400000).toISOString(),
+    docs: 9,
   },
   {
-    id: 3,
-    score: 81,
-    entidad: 'INVIAS',
-    departamento: 'Cundinamarca',
-    objeto: 'Rehabilitación de la carretera Bogotá–Villeta, sector La Vega–Villeta, corredor nacional Ruta 50 — intervención integral de pavimento flexible',
+    id: 3, score: 82,
+    entidad: 'Metro de Medellín',
+    idProceso: 'MET-2026-TR-004',
+    sector: 'Tech Services',
+    objeto: 'Consultoría para la expansión de la línea A del sistema masivo de transporte, estudios de prefactibilidad y diseños de detalle',
+    presupuesto: 3400000000,
+    cierre: new Date(Date.now() + 18 * 86400000).toISOString(),
+    docs: 11,
+  },
+  {
+    id: 4, score: 91,
+    entidad: 'Gobernación Valle',
+    idProceso: 'GVAL-CIV-202',
+    sector: 'Infrastructure',
+    objeto: 'Construcción de centros de desarrollo infantil en tres municipios no certificados del departamento del Valle del Cauca',
     presupuesto: 8400000000,
-    cierre: '2026-06-20',
-    numero: 'INVIAS-LP-2026-117',
-    url: 'https://www.secop.gov.co/',
-    unspsc: 'V1.72141000',
-    requisitos: [
-      { ok: true,  texto: 'Experiencia en vías nacionales' },
-      { ok: true,  texto: 'Capacidad financiera K>2.0' },
-      { ok: false, texto: 'RUP vigente' },
-      { ok: false, texto: 'Equipo mínimo acreditado' },
-      { ok: false, texto: 'Ingeniero vial especializado' },
-    ],
-    documentos: ['Propuesta técnica','Propuesta económica','RUP','Estados financieros','Certificados de experiencia','Pólizas','Paz y salvo SENA','RIT'],
+    cierre: new Date(Date.now() + 4 * 86400000).toISOString(),
+    docs: 14,
   },
   {
-    id: 4,
-    score: 76,
-    entidad: 'Metro de Bogotá S.A.',
-    departamento: 'Bogotá D.C.',
-    objeto: 'Obras de infraestructura complementaria para la Primera Línea del Metro de Bogotá — adecuación de accesos y conectividad peatonal',
-    presupuesto: 3034467825,
-    cierre: '2026-07-05',
-    numero: 'METRO-LP-2026-008',
-    url: 'https://www.secop.gov.co/',
-    unspsc: 'V1.72141100',
-    requisitos: [
-      { ok: true,  texto: 'Experiencia en infraestructura urbana' },
-      { ok: true,  texto: 'Capacidad financiera K>1.8' },
-      { ok: true,  texto: 'RUP vigente' },
-      { ok: false, texto: 'Certificación en obras subterráneas' },
-      { ok: false, texto: 'Seguro todo riesgo construcción' },
-    ],
-    documentos: ['Propuesta técnica','Propuesta económica','RUP','Estados financieros','Certificados de experiencia','Pólizas','Paz y salvo SENA','RIT'],
+    id: 5, score: 76,
+    entidad: 'INVIAS',
+    idProceso: 'INVIAS-LP-2026-117',
+    sector: 'Infrastructure',
+    objeto: 'Rehabilitación de la carretera Bogotá–Villeta, sector La Vega–Villeta, corredor nacional Ruta 50',
+    presupuesto: 5200000000,
+    cierre: new Date(Date.now() + 22 * 86400000).toISOString(),
+    docs: 10,
   },
   {
-    id: 5,
-    score: 68,
-    entidad: 'E.S.E Hospital Diógenes Troncoso',
-    departamento: 'Cundinamarca',
-    objeto: 'Construcción de la nueva unidad de cuidados intensivos y urgencias del Hospital Diógenes Troncoso de Puerto Salgar',
-    presupuesto: 1821447112,
-    cierre: '2026-06-29',
-    numero: 'ESE-MC-2026-012',
-    url: 'https://www.secop.gov.co/',
-    unspsc: 'V1.72120000',
-    requisitos: [
-      { ok: true,  texto: 'Experiencia en edificaciones hospitalarias' },
-      { ok: false, texto: 'Capacidad financiera K>1.5' },
-      { ok: true,  texto: 'RUP vigente' },
-      { ok: false, texto: 'Arquitecto con tarjeta profesional' },
-      { ok: false, texto: 'Certificación NSR-10' },
-    ],
-    documentos: ['Propuesta técnica','Propuesta económica','RUP','Estados financieros','Certificados de experiencia','Pólizas','Paz y salvo SENA','RIT'],
-  },
-  {
-    id: 6,
-    score: 61,
-    entidad: 'Municipio de Zipaquirá',
-    departamento: 'Cundinamarca',
-    objeto: 'Mantenimiento y mejoramiento de la red de alcantarillado sanitario y pluvial del casco urbano del municipio de Zipaquirá',
-    presupuesto: 984000000,
-    cierre: '2026-07-12',
-    numero: 'ZIP-MC-2026-029',
-    url: 'https://www.secop.gov.co/',
-    unspsc: 'V1.72151000',
-    requisitos: [
-      { ok: true,  texto: 'Experiencia en redes de servicios públicos' },
-      { ok: true,  texto: 'RUP vigente' },
-      { ok: false, texto: 'Capacidad financiera K>1.2' },
-      { ok: false, texto: 'Ingeniero sanitario' },
-      { ok: false, texto: 'Certificación ambiental' },
-    ],
-    documentos: ['Propuesta técnica','Propuesta económica','RUP','Estados financieros','Certificados de experiencia','Pólizas','Paz y salvo SENA','RIT'],
-  },
-  {
-    id: 7,
-    score: 55,
-    entidad: 'AEROCIVIL',
-    departamento: 'Bogotá D.C.',
-    objeto: 'Consultoría para la actualización del Plan de Expansión y Modernización de la infraestructura aeroportuaria de la red regional',
-    presupuesto: 560000000,
-    cierre: '2026-07-18',
-    numero: 'AERO-MC-2026-055',
-    url: 'https://www.secop.gov.co/',
-    unspsc: 'V1.81101500',
-    requisitos: [
-      { ok: true,  texto: 'Experiencia en consultoría de infraestructura' },
-      { ok: false, texto: 'Especialista en infraestructura aeroportuaria' },
-      { ok: true,  texto: 'RUP vigente' },
-      { ok: false, texto: 'Certificación OACI' },
-      { ok: false, texto: 'Experiencia internacional verificable' },
-    ],
-    documentos: ['Propuesta técnica','Propuesta económica','RUP','Estados financieros','Certificados de experiencia','Pólizas','Paz y salvo SENA','RIT'],
-  },
-  {
-    id: 8,
-    score: 44,
-    entidad: 'Fondo Colombia en Paz',
-    departamento: 'Cundinamarca',
-    objeto: 'Construcción de viviendas de interés social en zonas rurales del Municipio de Guaduas como parte del programa de sustitución de cultivos',
-    presupuesto: 1584351744,
-    cierre: '2026-07-25',
-    numero: 'FCP-MC-2026-003',
-    url: 'https://www.secop.gov.co/',
-    unspsc: 'V1.72120000',
-    requisitos: [
-      { ok: true,  texto: 'Experiencia en VIS rural' },
-      { ok: false, texto: 'Capacidad financiera K>1.0' },
-      { ok: false, texto: 'RUP vigente' },
-      { ok: false, texto: 'Componente social acreditado' },
-      { ok: false, texto: 'Certificación en zonas de posconflicto' },
-    ],
-    documentos: ['Propuesta técnica','Propuesta económica','RUP','Estados financieros','Certificados de experiencia','Pólizas','Paz y salvo SENA','RIT'],
+    id: 6, score: 69,
+    entidad: 'MinTIC',
+    idProceso: 'CTIC-2026-DIG-031',
+    sector: 'Tech Services',
+    objeto: 'Implementación de infraestructura de conectividad en zonas rurales y municipios PDET — fase III',
+    presupuesto: 1900000000,
+    cierre: new Date(Date.now() + 30 * 86400000).toISOString(),
+    docs: 7,
   },
 ]
 
-const ACTIVIDAD = [
-  { color: '#15803d', msg: 'Nuevo proceso detectado — IDU — Construcción malla vial Kennedy', tiempo: 'hace 2 min' },
-  { color: '#1e3a5f', msg: 'Score actualizado — INVIAS Ruta 50 — ahora 81/100', tiempo: 'hace 8 min' },
-  { color: '#b45309', msg: 'Adenda publicada — Hospital Diógenes Troncoso — revisa cambios en pliego', tiempo: 'hace 23 min' },
-  { color: '#15803d', msg: 'Nuevo proceso detectado — Alcaldía Cajicá — IE Zipacón obras civiles', tiempo: 'hace 41 min' },
-  { color: '#c0392b', msg: 'Cierre en 2 días — INVIAS LP-2026-117 — ¡acción requerida!', tiempo: 'hace 1 hora' },
-  { color: '#15803d', msg: 'Nuevo proceso detectado — Metro de Bogotá — conectividad PLMB', tiempo: 'hace 1h 15min' },
-  { color: '#b45309', msg: 'Adenda en proceso IDU-LP-2026-003 — nueva fecha de cierre', tiempo: 'hace 2 horas' },
-  { color: '#1e3a5f', msg: 'Radar completado — 8 procesos compatibles — 3 urgentes', tiempo: 'hace 3 horas' },
+const DOCS_SECOP = [
+  { nombre: 'Carta de presentación',         estado: 'CARGADO',              ok: true  },
+  { nombre: 'RUP vigente (SECOP II)',         estado: 'VERIFICADO',           ok: true  },
+  { nombre: 'Cert. existencia y rep. legal',  estado: 'CARGADO HACE 2H',      ok: true  },
+  { nombre: 'Paz y salvo SENA / parafiscales',estado: 'VERIFICADO',           ok: true  },
+  { nombre: 'Estados financieros certificados',estado:'PENDIENTE REVISIÓN',   ok: false },
+  { nombre: 'Propuesta técnica',              estado: 'EN ELABORACIÓN',        ok: false },
+  { nombre: 'Formulario presupuesto oficial', estado: 'ESPERANDO CÁLCULO',    ok: false },
+  { nombre: 'Póliza garantía de seriedad',    estado: 'TRAMITANDO',           ok: false },
 ]
 
-/* ─────────────────────────────────────────────
-   COMPONENTE: Partículas de fondo (canvas puro)
-───────────────────────────────────────────────*/
-function ParticlesCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+const ETAPAS_SECOP = [
+  { label: 'Publicación del proceso',         done: true,    fecha: 'hace 8 días' },
+  { label: 'Observaciones al pliego',         done: true,    fecha: 'hace 5 días' },
+  { label: 'Respuesta a observaciones',       done: true,    fecha: 'hace 3 días' },
+  { label: 'Cierre y apertura de sobres',     done: false,   fecha: 'en 2 días', urgente: true },
+  { label: 'Evaluación de propuestas',        done: false,   fecha: 'estimado: +7 días' },
+  { label: 'Informe de evaluación',           done: false,   fecha: 'estimado: +12 días' },
+  { label: 'Traslado del informe',            done: false,   fecha: 'estimado: +14 días' },
+  { label: 'Audiencia de adjudicación',       done: false,   fecha: 'estimado: +18 días' },
+  { label: 'Adjudicación del contrato',       done: false,   fecha: 'estimado: +20 días' },
+]
 
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    let raf: number
-    const COUNT = 55
-
-    const resize = () => {
-      canvas.width  = canvas.offsetWidth
-      canvas.height = canvas.offsetHeight
-    }
-    resize()
-    window.addEventListener('resize', resize)
-
-    type Particle = { x: number; y: number; vx: number; vy: number; r: number; op: number }
-    const particles: Particle[] = Array.from({ length: COUNT }, () => ({
-      x:  Math.random() * canvas.width,
-      y:  Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * 0.25,
-      vy: (Math.random() - 0.5) * 0.25,
-      r:  Math.random() * 1.4 + 0.4,
-      op: Math.random() * 0.18 + 0.04,
-    }))
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      for (const p of particles) {
-        p.x += p.vx; p.y += p.vy
-        if (p.x < 0) p.x = canvas.width
-        if (p.x > canvas.width)  p.x = 0
-        if (p.y < 0) p.y = canvas.height
-        if (p.y > canvas.height) p.y = 0
-        ctx.beginPath()
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(100,95,88,${p.op})`
-        ctx.fill()
-      }
-      raf = requestAnimationFrame(draw)
-    }
-    draw()
-
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize) }
-  }, [])
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'absolute', inset: 0,
-        width: '100%', height: '100%',
-        pointerEvents: 'none', zIndex: 0,
-      }}
-    />
-  )
-}
-
-/* ─────────────────────────────────────────────
-   COMPONENTE: Línea de escaneo (una sola vez)
-───────────────────────────────────────────────*/
-function ScanLine() {
-  const [visible, setVisible] = useState(true)
-  useEffect(() => { const t = setTimeout(() => setVisible(false), 700); return () => clearTimeout(t) }, [])
-  if (!visible) return null
-  return (
-    <div style={{
-      position: 'absolute', left: 0, right: 0, height: 2,
-      background: 'linear-gradient(90deg, transparent 0%, #e8601c 40%, #ff8a4c 50%, #e8601c 60%, transparent 100%)',
-      boxShadow: '0 0 12px 2px rgba(232,96,28,0.7)',
-      animation: 'scan-sweep 0.6s cubic-bezier(0.4,0,0.6,1) forwards',
-      zIndex: 99, pointerEvents: 'none',
-    }} />
-  )
-}
-
-/* ─────────────────────────────────────────────
-   COMPONENTE: Score badge SVG con arco animado
-───────────────────────────────────────────────*/
-function ScoreBadge({ score, size = 44, delay = 0 }: { score: number; size?: number; delay?: number }) {
-  const r = (size / 2) - 4
-  const circ = 2 * Math.PI * r
-  const target = circ * (1 - score / 100)
-  const color = score >= 90 ? '#15803d' : score >= 70 ? '#1e3a5f' : score >= 50 ? '#b45309' : '#c0392b'
-  const trackColor = score >= 90 ? 'rgba(21,128,61,0.12)' : score >= 70 ? 'rgba(30,58,95,0.12)' : score >= 50 ? 'rgba(180,83,9,0.12)' : 'rgba(192,57,43,0.12)'
-
-  return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        {/* pista de fondo */}
-        <circle cx={size/2} cy={size/2} r={r} fill={trackColor} stroke={color} strokeWidth={2} strokeOpacity={0.18} />
-        {/* arco animado */}
-        <circle
-          cx={size/2} cy={size/2} r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth={2.5}
-          strokeLinecap="round"
-          strokeDasharray={circ}
-          strokeDashoffset={target}
-          className="score-arc"
-          style={{
-            '--circ': circ,
-            '--target': target,
-            animationDelay: `${delay}ms`,
-          } as React.CSSProperties}
-        />
-      </svg>
-      {/* número centrado */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontWeight: 700, fontSize: 13, color,
-      }}>
-        {score}
-      </div>
-    </div>
-  )
-}
-
-/* ─────────────────────────────────────────────
-   UTILIDADES
-───────────────────────────────────────────────*/
+/* ─── Utils ───────────────────────────────── */
 function fmtCOP(n: number) {
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1).replace('.', ',')}B`
-  if (n >= 1_000_000)     return `$${(n / 1_000_000).toFixed(0)}M`
-  return '$' + n.toLocaleString('es-CO')
+  return `$${Math.round(n / 1_000_000).toLocaleString('es-CO')}M`
 }
 
-function fmtFecha(iso: string) {
-  const [y, m, d] = iso.split('-').map(Number)
-  const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
-  return `${d} ${meses[m - 1]} ${y}`
-}
-
-function diasRestantes(iso: string) {
-  const hoy = new Date(); hoy.setHours(0,0,0,0)
-  const cierre = new Date(iso); cierre.setHours(0,0,0,0)
-  return Math.round((cierre.getTime() - hoy.getTime()) / 86400000)
-}
-
-function scoreColor(s: number) {
-  if (s >= 90) return '#15803d'
-  if (s >= 70) return '#1e3a5f'
-  if (s >= 50) return '#b45309'
-  return '#c0392b'
-}
-
-/* ─────────────────────────────────────────────
-   HOOK: contador animado
-───────────────────────────────────────────────*/
-function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3) }
-
-function useCounter(target: number, duration = 1200) {
-  const [val, setVal] = useState(0)
+function useCountdown(iso: string) {
+  const [txt, setTxt] = useState('')
   useEffect(() => {
-    if (target === 0) return
-    const start = performance.now()
+    const tick = () => {
+      const diff = new Date(iso).getTime() - Date.now()
+      if (diff <= 0) { setTxt('CERRADO'); return }
+      const d = Math.floor(diff / 86400000)
+      const h = Math.floor((diff % 86400000) / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      if (d > 0) setTxt(`${d}d ${String(h).padStart(2,'0')}h`)
+      else setTxt(`${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m`)
+    }
+    tick()
+    const id = setInterval(tick, 30000)
+    return () => clearInterval(id)
+  }, [iso])
+  return txt
+}
+
+function easeOut(t: number) { return 1 - Math.pow(1 - t, 3) }
+function useCounter(target: number) {
+  const [v, setV] = useState(0)
+  useEffect(() => {
+    const s = performance.now()
     let raf: number
     const tick = (now: number) => {
-      const t = Math.min((now - start) / duration, 1)
-      setVal(Math.round(easeOutCubic(t) * target))
+      const t = Math.min((now - s) / 1400, 1)
+      setV(Math.round(easeOut(t) * target))
       if (t < 1) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [target, duration])
-  return val
+  }, [target])
+  return v
 }
 
-/* ─────────────────────────────────────────────
-   COMPONENTE: Reloj en tiempo real
-───────────────────────────────────────────────*/
-function LiveClock() {
-  const [hora, setHora] = useState('')
+function useClock() {
+  const [t, setT] = useState('')
   useEffect(() => {
-    const tick = () => setHora(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-    tick()
-    const t = setInterval(tick, 1000)
-    return () => clearInterval(t)
+    const tick = () => setT(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+    tick(); const id = setInterval(tick, 1000); return () => clearInterval(id)
   }, [])
-  return <span style={{ fontVariantNumeric: 'tabular-nums' }}>{hora}</span>
+  return t
 }
 
-/* ─────────────────────────────────────────────
-   COMPONENTE: Tarjeta KPI
-───────────────────────────────────────────────*/
-function KpiCard({ label, sub, children }: { label: string; sub: string; children: React.ReactNode }) {
-  return (
-    <div style={{
-      flex: 1,
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 6,
-      padding: '24px 28px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-    }}>
-      <div style={{ fontSize: 48, fontWeight: 700, lineHeight: 1, color: '#1a1714', letterSpacing: '-1px' }}>
-        {children}
-      </div>
-      <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-sec)', marginTop: 10 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 12, color: '#15803d', marginTop: 4 }}>{sub}</div>
-    </div>
-  )
+/* ─── Fondo: Circuito PCB ────────────────────── */
+function Particles() {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const c = ref.current; if (!c) return
+    const ctx = c.getContext('2d'); if (!ctx) return
+    let raf: number
+
+    const GRID = 32
+    type Seg = { x1: number; y1: number; x2: number; y2: number; pulse: number; speed: number; offset: number }
+    type Node = { x: number; y: number; r: number }
+    let segs: Seg[] = []
+    let nodes: Node[] = []
+
+    const init = () => {
+      const p = c.parentElement
+      c.width  = p ? p.offsetWidth  : 800
+      c.height = p ? p.offsetHeight : 200
+      segs = []
+      nodes = []
+
+      const cols = Math.floor(c.width / GRID) + 1
+      const rows = Math.floor(c.height / GRID) + 1
+
+      // Segmentos horizontales y verticales aleatorios
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols - 1; col++) {
+          if (Math.random() < 0.28) {
+            segs.push({
+              x1: col * GRID, y1: row * GRID,
+              x2: (col + 1) * GRID, y2: row * GRID,
+              pulse: 0, speed: 0.004 + Math.random() * 0.006,
+              offset: Math.random() * Math.PI * 2,
+            })
+          }
+        }
+      }
+      for (let row = 0; row < rows - 1; row++) {
+        for (let col = 0; col < cols; col++) {
+          if (Math.random() < 0.22) {
+            segs.push({
+              x1: col * GRID, y1: row * GRID,
+              x2: col * GRID, y2: (row + 1) * GRID,
+              pulse: 0, speed: 0.004 + Math.random() * 0.006,
+              offset: Math.random() * Math.PI * 2,
+            })
+          }
+        }
+      }
+
+      // Nodos en intersecciones donde hay al menos un segmento
+      const nodeSet = new Set<string>()
+      for (const s of segs) {
+        nodeSet.add(`${s.x1},${s.y1}`)
+        nodeSet.add(`${s.x2},${s.y2}`)
+      }
+      for (const key of nodeSet) {
+        if (Math.random() < 0.35) {
+          const [x, y] = key.split(',').map(Number)
+          nodes.push({ x, y, r: Math.random() < 0.2 ? 3 : 1.5 })
+        }
+      }
+    }
+
+    init()
+    window.addEventListener('resize', init)
+
+    // Señales viajando por los segmentos
+    type Signal = { segIdx: number; progress: number; speed: number }
+    const signals: Signal[] = []
+    // Lanzar una señal cada ~40 frames en un segmento aleatorio
+    let frameCount = 0
+
+    let t = 0
+    const draw = () => {
+      ctx.clearRect(0, 0, c.width, c.height)
+      t += 0.016
+      frameCount++
+
+      if (frameCount % 38 === 0 && segs.length > 0) {
+        const idx = Math.floor(Math.abs(Math.sin(frameCount * 1.7)) * segs.length)
+        signals.push({ segIdx: idx % segs.length, progress: 0, speed: 0.02 + Math.abs(Math.sin(frameCount)) * 0.03 })
+      }
+
+      // Líneas base
+      for (const s of segs) {
+        const alpha = 0.05 + 0.04 * (0.5 + 0.5 * Math.sin(t * s.speed * 60 + s.offset))
+        ctx.beginPath()
+        ctx.moveTo(s.x1, s.y1)
+        ctx.lineTo(s.x2, s.y2)
+        ctx.strokeStyle = `rgba(249,115,22,${alpha})`
+        ctx.lineWidth = 1
+        ctx.stroke()
+      }
+
+      // Señales viajando
+      for (let i = signals.length - 1; i >= 0; i--) {
+        const sig = signals[i]
+        sig.progress += sig.speed
+        if (sig.progress > 1) { signals.splice(i, 1); continue }
+        const s = segs[sig.segIdx]
+        const x = s.x1 + (s.x2 - s.x1) * sig.progress
+        const y = s.y1 + (s.y2 - s.y1) * sig.progress
+        // Estela
+        const tailLen = 0.25
+        const tailStart = Math.max(0, sig.progress - tailLen)
+        const tx = s.x1 + (s.x2 - s.x1) * tailStart
+        const ty = s.y1 + (s.y2 - s.y1) * tailStart
+        const grad = ctx.createLinearGradient(tx, ty, x, y)
+        grad.addColorStop(0, 'rgba(251,146,60,0)')
+        grad.addColorStop(1, 'rgba(251,146,60,0.55)')
+        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y)
+        ctx.strokeStyle = grad; ctx.lineWidth = 1.5; ctx.stroke()
+        // Punto de cabeza
+        ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(147,197,253,0.9)'; ctx.fill()
+      }
+
+      // Nodos
+      for (const n of nodes) {
+        const alpha = 0.1 + 0.08 * (0.5 + 0.5 * Math.sin(t * 0.3 + n.x * 0.05))
+        ctx.beginPath()
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(251,146,60,${alpha})`
+        ctx.fill()
+      }
+
+      raf = requestAnimationFrame(draw)
+    }
+    draw()
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', init) }
+  }, [])
+  return <canvas ref={ref} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0, display: 'block' }} />
 }
 
-/* ─────────────────────────────────────────────
-   COMPONENTE: Panel lateral
-───────────────────────────────────────────────*/
-function PanelLateral({ proceso, onClose }: { proceso: typeof PROCESOS[0]; onClose: () => void }) {
-  const [seccion, setSeccion] = useState<Record<string, boolean>>({
-    requisitos: true, calc: false, docs: false,
-  })
-  const [costos, setCostos] = useState('')
-  const [aiu, setAiu] = useState('28')
-  const [docsCheck, setDocsCheck] = useState<boolean[]>(proceso.documentos.map(() => false))
+/* ─── Panel "Mis Propuestas" ─────────────────── */
+const MIS_PROPUESTAS = [
+  { id: 'IDU-LP-2026-003',  entidad: 'IDU Bogotá',       estado: 'EN EVALUACIÓN', color: '#facc15', dias: 5  },
+  { id: 'GDA-LP-2026-041',  entidad: 'Gob. Antioquia',   estado: 'PRESENTADA',    color: '#22c55e', dias: 12 },
+  { id: 'INVIAS-LP-2026-09',entidad: 'INVIAS',            estado: 'SUBSANACIÓN',   color: '#ef4444', dias: 2  },
+]
 
-  const costosN = parseFloat(costos.replace(/\./g, '').replace(',', '.')) || 0
-  const aiuN = parseFloat(aiu) / 100 || 0
-  const propuesta = costosN * (1 + aiuN)
-  const margen = proceso.presupuesto > 0 ? ((propuesta / proceso.presupuesto) - 1) * 100 : 0
-  const requisitosOk = proceso.requisitos.filter(r => r.ok).length
-  const docsOk = docsCheck.filter(Boolean).length
-  const dias = diasRestantes(proceso.cierre)
+function MisPropuestasDropdown() {
+  const C = useTheme()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
 
-  function toggle(k: string) {
-    setSeccion(p => ({ ...p, [k]: !p[k] }))
-  }
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   return (
-    <div
-      className="panel-slide-in"
-      style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0,
-        width: 480, background: '#faf9f6',
-        borderLeft: '1px solid var(--border)',
-        zIndex: 50, overflowY: 'auto', display: 'flex', flexDirection: 'column',
-      }}
-    >
-      {/* cabecera panel */}
-      <div style={{
-        padding: '20px 24px',
-        borderBottom: '1px solid var(--border)',
-        position: 'sticky', top: 0, background: '#faf9f6', zIndex: 1,
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-sec)', marginBottom: 6 }}>
-              Análisis de proceso
-            </div>
-            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)', lineHeight: 1.4 }}>
-              {proceso.entidad}
-            </div>
-            <div style={{ color: 'var(--text-sec)', fontSize: 12, marginTop: 4 }}>{proceso.numero}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <ScoreBadge score={proceso.score} delay={100} />
-            <button onClick={onClose} style={{
-              background: 'var(--border)', border: 'none', color: 'var(--text-sec)',
-              width: 32, height: 32, borderRadius: 4, fontSize: 18, lineHeight: 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>×</button>
-          </div>
-        </div>
-        <div style={{
-          marginTop: 14, padding: '10px 14px',
-          background: 'var(--surface)', borderRadius: 4,
-          fontSize: 12, color: 'var(--text-sec)', lineHeight: 1.6,
-        }}>
-          {proceso.objeto}
-        </div>
-        <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 12 }}>
-          <span style={{ color: '#15803d', fontWeight: 600 }}>{fmtCOP(proceso.presupuesto)}</span>
-          <span style={{ color: dias <= 7 ? '#c0392b' : 'var(--text-sec)' }}>
-            {dias <= 0 ? 'CERRADO' : `Cierra en ${dias} día${dias !== 1 ? 's' : ''}`}
-          </span>
-        </div>
-      </div>
-
-      {/* cuerpo */}
-      <div style={{ padding: '0 0 40px' }}>
-
-        {/* REQUISITOS */}
-        <SeccionPanel titulo="CHECKLIST DE REQUISITOS" abierta={seccion.requisitos} onToggle={() => toggle('requisitos')}>
-          <div style={{ padding: '16px 24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>Cumples {requisitosOk} de {proceso.requisitos.length} requisitos</span>
-              <BarraProgreso valor={requisitosOk} total={proceso.requisitos.length} color="#1e3a5f" />
-            </div>
-            {proceso.requisitos.map((r, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '9px 0',
-                borderBottom: i < proceso.requisitos.length - 1 ? '1px solid var(--border)' : 'none',
-              }}>
-                <span style={{
-                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                  background: r.ok ? 'rgba(21,128,61,0.1)' : 'rgba(192,57,43,0.1)',
-                  border: `1px solid ${r.ok ? '#15803d' : '#c0392b'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, color: r.ok ? '#15803d' : '#c0392b', fontWeight: 700,
-                }}>
-                  {r.ok ? '✓' : '✗'}
-                </span>
-                <span style={{ fontSize: 13, color: r.ok ? 'var(--text)' : 'var(--text-sec)' }}>{r.texto}</span>
-              </div>
-            ))}
-          </div>
-        </SeccionPanel>
-
-        {/* CALCULADORA */}
-        <SeccionPanel titulo="CALCULADORA DE PROPUESTA" abierta={seccion.calc} onToggle={() => toggle('calc')}>
-          <div style={{ padding: '16px 24px' }}>
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-sec)', display: 'block', marginBottom: 6 }}>
-                Costos directos (COP)
-              </label>
-              <input
-                type="text"
-                value={costos}
-                onChange={e => setCostos(e.target.value)}
-                placeholder="Ej: 3500000000"
-                style={{
-                  width: '100%', background: 'var(--surface)',
-                  border: '1px solid var(--border)', borderRadius: 4,
-                  padding: '10px 12px', color: 'var(--text)', fontSize: 14, outline: 'none',
-                }}
-              />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-sec)', display: 'block', marginBottom: 6 }}>
-                AIU (%)
-              </label>
-              <input
-                type="number"
-                value={aiu}
-                onChange={e => setAiu(e.target.value)}
-                style={{
-                  width: '100%', background: 'var(--surface)',
-                  border: '1px solid var(--border)', borderRadius: 4,
-                  padding: '10px 12px', color: 'var(--text)', fontSize: 14, outline: 'none',
-                }}
-              />
-            </div>
-            {propuesta > 0 && (
-              <div style={{
-                background: 'var(--surface)', borderRadius: 4,
-                padding: '16px 18px', border: '1px solid var(--border)',
-              }}>
-                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-sec)', marginBottom: 8 }}>
-                  Valor propuesta
-                </div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#1a1714', letterSpacing: '-0.5px' }}>
-                  {fmtCOP(propuesta)}
-                </div>
-                <div style={{ marginTop: 10, fontSize: 12 }}>
-                  <span style={{ color: 'var(--text-sec)' }}>vs. presupuesto oficial: </span>
-                  <span style={{
-                    display: 'inline-block', marginLeft: 6,
-                    padding: '2px 8px', borderRadius: 3, fontSize: 11, fontWeight: 700,
-                    background: Math.abs(margen) < 15 ? 'rgba(21,128,61,0.1)' : 'rgba(192,57,43,0.1)',
-                    color: Math.abs(margen) < 15 ? '#15803d' : '#c0392b',
-                  }}>
-                    {margen > 0 ? '+' : ''}{margen.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </SeccionPanel>
-
-        {/* DOCUMENTOS */}
-        <SeccionPanel titulo="DOCUMENTOS A PREPARAR" abierta={seccion.docs} onToggle={() => toggle('docs')}>
-          <div style={{ padding: '16px 24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>{docsOk} de {proceso.documentos.length} listos</span>
-              <BarraProgreso valor={docsOk} total={proceso.documentos.length} color="#15803d" />
-            </div>
-            {proceso.documentos.map((doc, i) => (
-              <div
-                key={i}
-                onClick={() => setDocsCheck(p => { const n = [...p]; n[i] = !n[i]; return n })}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '9px 0', cursor: 'pointer',
-                  borderBottom: i < proceso.documentos.length - 1 ? '1px solid var(--border)' : 'none',
-                }}
-              >
-                <div style={{
-                  width: 18, height: 18, borderRadius: 3, flexShrink: 0,
-                  background: docsCheck[i] ? '#15803d' : 'transparent',
-                  border: `1px solid ${docsCheck[i] ? '#15803d' : 'var(--border)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, color: '#000', fontWeight: 700,
-                }}>
-                  {docsCheck[i] ? '✓' : ''}
-                </div>
-                <span style={{ fontSize: 13, color: docsCheck[i] ? 'var(--text-sec)' : 'var(--text)', textDecoration: docsCheck[i] ? 'line-through' : 'none' }}>
-                  {doc}
-                </span>
-              </div>
-            ))}
-          </div>
-        </SeccionPanel>
-      </div>
-    </div>
-  )
-}
-
-function SeccionPanel({ titulo, abierta, onToggle, children }: {
-  titulo: string; abierta: boolean; onToggle: () => void; children: React.ReactNode
-}) {
-  return (
-    <div style={{ borderBottom: '1px solid var(--border)' }}>
+    <div ref={ref} style={{ position: 'relative' }}>
       <button
-        onClick={onToggle}
+        onClick={() => setOpen(o => !o)}
         style={{
-          width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-          padding: '14px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          color: 'var(--text-sec)',
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: open ? 'rgba(249,115,22,.15)' : C.card,
+          border: `1px solid ${open ? C.orange : C.border}`,
+          borderRadius: 6, padding: '5px 12px',
+          color: open ? C.orange : C.textSec, fontSize: 12, fontWeight: 600,
+          cursor: 'pointer', transition: 'all 160ms', letterSpacing: '.02em',
         }}
       >
-        <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 500 }}>{titulo}</span>
-        <span style={{ fontSize: 16, transform: abierta ? 'rotate(90deg)' : 'none', transition: 'transform 200ms' }}>▸</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        Mis propuestas
+        <span style={{
+          background: C.orange, color: '#fff', borderRadius: 10,
+          fontSize: 9, fontWeight: 700, padding: '1px 6px', lineHeight: '16px',
+        }}>{MIS_PROPUESTAS.length}</span>
+        <span style={{ fontSize: 10, marginLeft: 2 }}>{open ? '▲' : '▼'}</span>
       </button>
-      {abierta && children}
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+          width: 320, background: C.card, border: `1px solid ${C.border}`,
+          borderRadius: 8, zIndex: 100,
+          boxShadow: '0 16px 40px rgba(0,0,0,.6)',
+          animation: 'row-enter .18s ease both',
+        }}>
+          {/* header dropdown */}
+          <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.text, letterSpacing: '.06em', textTransform: 'uppercase' }}>Mis propuestas activas</span>
+            <span style={{ fontSize: 10, color: C.textSec }}>SECOP II</span>
+          </div>
+
+          {/* lista */}
+          {MIS_PROPUESTAS.map((p, i) => (
+            <div key={i} style={{
+              padding: '12px 16px',
+              borderBottom: i < MIS_PROPUESTAS.length - 1 ? `1px solid ${C.border}` : 'none',
+              display: 'flex', alignItems: 'center', gap: 12,
+              cursor: 'pointer', transition: 'background 150ms',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = C.cardHover)}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, flexShrink: 0, boxShadow: `0 0 6px ${p.color}` }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 2 }}>{p.entidad}</div>
+                <div style={{ fontSize: 10, color: C.textSec, fontFamily: 'monospace' }}>{p.id}</div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: p.color, letterSpacing: '.06em' }}>{p.estado}</div>
+                <div style={{ fontSize: 9, color: C.textSec, marginTop: 2 }}>Vence en {p.dias}d</div>
+              </div>
+            </div>
+          ))}
+
+          {/* footer */}
+          <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, textAlign: 'center' }}>
+            <button style={{ background: 'none', border: 'none', color: C.orange, fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '.04em' }}>
+              Ver todas las propuestas →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function BarraProgreso({ valor, total, color }: { valor: number; total: number; color: string }) {
-  const pct = total > 0 ? (valor / total) * 100 : 0
+/* ─── Score Badge ──────────────────────────── */
+function ScoreBadge({ score }: { score: number }) {
+  const C = useTheme()
+  const size = 52, r = 22
+  const circ = 2 * Math.PI * r
+  const offset = circ * (1 - score / 100)
+  const col = score >= 80 ? C.orange : score >= 60 ? '#facc15' : C.red
   return (
-    <div style={{ width: 80, height: 4, background: 'var(--border)', borderRadius: 2 }}>
-      <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 300ms' }} />
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', display: 'block' }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={1.5} strokeOpacity={.18} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={2.5}
+          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
+          className="score-arc" style={{ '--circ': circ, '--target': offset } as React.CSSProperties} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: col, lineHeight: 1 }}>{score}%</span>
+      </div>
     </div>
   )
 }
 
-/* ─────────────────────────────────────────────
-   PÁGINA PRINCIPAL
-───────────────────────────────────────────────*/
+/* ─── Countdown cell ─────────────────────── */
+function CountdownCell({ iso }: { iso: string }) {
+  const C = useTheme()
+  const txt = useCountdown(iso)
+  const diff = new Date(iso).getTime() - Date.now()
+  const urgent = diff < 86400000 * 2
+  return (
+    <span style={{ color: urgent ? C.red : C.orange, fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
+      {urgent && '⚠ '}{txt}
+    </span>
+  )
+}
+
+/* ─── Card de proceso — alto impacto ─────── */
+function ProcesoCard({ p, onClick, active }: { p: typeof PROCESOS[0]; onClick: () => void; active: boolean }) {
+  const C = useTheme()
+  const [hov, setHov] = useState(false)
+  const diff = new Date(p.cierre).getTime() - Date.now()
+  const urgent = diff < 86400000 * 2
+  const scoreCol = p.score >= 80 ? C.orange : p.score >= 60 ? '#facc15' : C.red
+  const accentCol = urgent ? C.red : active ? C.orange : hov ? C.orange : C.border
+
+  return (
+    <div onClick={onClick}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        background: active ? C.cardHover : hov ? C.cardHover : C.card,
+        borderTop: `1px solid ${accentCol}`,
+        borderRight: `1px solid ${accentCol}`,
+        borderBottom: `1px solid ${accentCol}`,
+        borderLeft: `3px solid ${scoreCol}`,
+        borderRadius: 8, padding: '0', cursor: 'pointer',
+        transition: 'all 180ms',
+        boxShadow: active
+          ? `0 0 24px rgba(249,115,22,.18), 0 4px 16px rgba(0,0,0,.4)`
+          : hov
+            ? `0 8px 28px rgba(0,0,0,.35)`
+            : urgent
+              ? `0 0 14px rgba(239,68,68,.12)`
+              : `0 2px 8px rgba(0,0,0,.25)`,
+        transform: hov ? 'translateY(-2px)' : 'none',
+        overflow: 'hidden',
+      }}>
+
+      {/* Banda superior de color si es urgente */}
+      {urgent && (
+        <div style={{ height: 2, background: `linear-gradient(90deg, ${C.red}, transparent)` }} />
+      )}
+
+      <div style={{ padding: '18px 18px 0' }}>
+        {/* Score grande + entidad */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+          <div style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
+            {urgent && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 3, background: 'rgba(239,68,68,.15)', border: '1px solid rgba(239,68,68,.3)', marginBottom: 7 }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.red }} className="pulse-status" />
+                <span style={{ fontSize: 9, fontWeight: 700, color: C.red, letterSpacing: '.1em' }}>CIERRE URGENTE</span>
+              </div>
+            )}
+            <div style={{ fontWeight: 700, fontSize: 16, color: C.text, lineHeight: 1.2, marginBottom: 3 }}>{p.entidad}</div>
+            <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.04em' }}>ID: {p.idProceso}</div>
+          </div>
+          {/* Score ring grande */}
+          <div style={{ textAlign: 'center', flexShrink: 0 }}>
+            <div style={{ position: 'relative', width: 60, height: 60 }}>
+              <svg width={60} height={60} style={{ transform: 'rotate(-90deg)', display: 'block' }}>
+                <circle cx={30} cy={30} r={25} fill="none" stroke={scoreCol} strokeWidth={2} strokeOpacity={.14} />
+                <circle cx={30} cy={30} r={25} fill="none" stroke={scoreCol} strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 25}
+                  strokeDashoffset={2 * Math.PI * 25 * (1 - p.score / 100)}
+                  className="score-arc"
+                  style={{ '--circ': 2 * Math.PI * 25, '--target': 2 * Math.PI * 25 * (1 - p.score / 100) } as React.CSSProperties}
+                />
+              </svg>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontWeight: 800, fontSize: 15, color: scoreCol, lineHeight: 1 }}>{p.score}</span>
+                <span style={{ fontSize: 8, color: scoreCol, fontWeight: 600 }}>%</span>
+              </div>
+            </div>
+            <div style={{ fontSize: 8, color: scoreCol, fontWeight: 700, letterSpacing: '.06em', marginTop: 2 }}>
+              {p.score >= 80 ? 'ALTO' : p.score >= 60 ? 'MEDIO' : 'BAJO'}
+            </div>
+          </div>
+        </div>
+
+        {/* Presupuesto — protagonista */}
+        <div style={{
+          margin: '12px -18px', padding: '12px 18px',
+          background: C.bg,
+          borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`,
+        }}>
+          <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 3 }}>
+            Valor del contrato
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: C.text, letterSpacing: '-1px', lineHeight: 1 }}>
+            {fmtCOP(p.presupuesto)}
+            <span style={{ fontSize: 12, fontWeight: 400, color: C.textSec, marginLeft: 6 }}>COP</span>
+          </div>
+        </div>
+
+        {/* Descripción */}
+        <p style={{
+          fontSize: 12, color: C.textSec, lineHeight: 1.6, margin: '12px 0',
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>{p.objeto}</p>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '10px 18px', background: C.bg,
+        borderTop: `1px solid ${C.border}`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.textSec} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span style={{ fontSize: 10, color: C.textSec, letterSpacing: '.04em', textTransform: 'uppercase' }}>Cierre:</span>
+          <CountdownCell iso={p.cierre} />
+        </div>
+        <div style={{
+          fontSize: 11, fontWeight: 600, color: hov || active ? C.orange : C.textSec,
+          transition: 'color 180ms', letterSpacing: '.04em',
+        }}>
+          {active ? '● ACTIVO' : 'Ver análisis →'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Panel Seguimiento de Propuesta ─────── */
+function ProposalTracker({ proceso }: { proceso: typeof PROCESOS[0] | null }) {
+  const C = useTheme()
+  const [docs, setDocs] = useState(DOCS_SECOP.map(d => d.ok))
+  const [tab, setTab] = useState<'docs' | 'etapas'>('docs')
+  const okCount = docs.filter(Boolean).length
+  const readiness = Math.round((okCount / DOCS_SECOP.length) * 100)
+
+  if (!proceso) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14 }}>
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke={C.textSec} strokeWidth="1.3">
+        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <p style={{ color: C.textSec, fontSize: 13, textAlign: 'center', lineHeight: 1.6 }}>
+        Selecciona una oportunidad<br/>para ver el seguimiento
+      </p>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, gap: 0 }}>
+
+      {/* ── Encabezado ── */}
+      <div style={{ marginBottom: 4 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 5 }}>
+          Seguimiento de Propuesta
+        </div>
+        <div style={{ fontSize: 10, color: C.orange, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+          ACTIVO: {proceso.idProceso}
+        </div>
+        <div style={{ fontSize: 12, color: C.textSec, marginTop: 3, lineHeight: 1.4 }}>
+          {proceso.entidad}
+        </div>
+      </div>
+
+      <div style={{ height: 1, background: C.border, margin: '14px 0' }} />
+
+      {/* ── Score de preparación ── */}
+      <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '12px 14px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Nivel de preparación</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: readiness >= 60 ? C.orange : C.red }}>{readiness}%</span>
+        </div>
+        <div style={{ height: 5, background: C.border, borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
+          <div style={{
+            width: `${readiness}%`, height: '100%', borderRadius: 3,
+            background: readiness >= 60
+              ? `linear-gradient(90deg, ${C.orange}, #fb923c)`
+              : `linear-gradient(90deg, ${C.red}, #f87171)`,
+            transition: 'width 600ms ease',
+          }} />
+        </div>
+        <div style={{ fontSize: 10, color: C.textSec }}>
+          {okCount} de {DOCS_SECOP.length} documentos listos
+        </div>
+      </div>
+
+      {/* ── Tabs ── */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
+        {([['docs', 'Documentos'], ['etapas', 'Etapas SECOP II']] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)} style={{
+            flex: 1, padding: '7px', borderRadius: 5, fontSize: 11, fontWeight: 600,
+            border: `1px solid ${tab === key ? C.orange : C.border}`,
+            background: tab === key ? 'rgba(249,115,22,.12)' : C.bg,
+            color: tab === key ? C.orange : C.textSec,
+            cursor: 'pointer', transition: 'all 160ms', letterSpacing: '.02em',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {/* ── DOCUMENTOS ── */}
+      {tab === 'docs' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 4 }}>
+            Documentos obligatorios — pliego de condiciones
+          </div>
+          {DOCS_SECOP.map((doc, i) => (
+            <div key={i}
+              onClick={() => setDocs(prev => { const n = [...prev]; n[i] = !n[i]; return n })}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                background: C.bg,
+                border: `1px solid ${docs[i] ? 'rgba(249,115,22,.35)' : C.border}`,
+                borderRadius: 6, cursor: 'pointer', transition: 'all 160ms',
+              }}>
+              {/* Check circle */}
+              <div style={{
+                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                border: `2px solid ${docs[i] ? C.orange : C.border}`,
+                background: docs[i] ? 'rgba(249,115,22,.15)' : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 160ms',
+              }}>
+                {docs[i] && (
+                  <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                    <polyline points="2,6 5,9 10,3" stroke={C.orange} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: docs[i] ? C.text : C.textSec, marginBottom: 1 }}>
+                  {doc.nombre}
+                </div>
+                <div style={{ fontSize: 9, color: docs[i] ? C.orange : C.textSec, letterSpacing: '.05em', textTransform: 'uppercase' }}>
+                  {doc.estado}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── ETAPAS SECOP II ── */}
+      {tab === 'etapas' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 12 }}>
+            Cronograma del proceso licitatorio
+          </div>
+          {ETAPAS_SECOP.map((e, i) => {
+            const isLast = i === ETAPAS_SECOP.length - 1
+            const isCurrent = !e.done && (i === 0 || ETAPAS_SECOP[i - 1].done)
+            return (
+              <div key={i} style={{ display: 'flex', gap: 12, position: 'relative' }}>
+                {/* línea vertical */}
+                {!isLast && (
+                  <div style={{
+                    position: 'absolute', left: 9, top: 20, bottom: -6, width: 1,
+                    background: e.done ? C.orange : C.border,
+                    zIndex: 0,
+                  }} />
+                )}
+                {/* nodo */}
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0, zIndex: 1, marginTop: 1,
+                  background: e.done ? C.orange : isCurrent ? 'rgba(249,115,22,.15)' : C.bg,
+                  border: `2px solid ${e.done ? C.orange : isCurrent ? C.orange : C.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {e.done && (
+                    <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+                      <polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                  {isCurrent && !e.done && (
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.orange }} />
+                  )}
+                </div>
+                {/* texto */}
+                <div style={{ paddingBottom: isLast ? 0 : 18, flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: isCurrent ? 600 : 400, color: e.done ? C.textSec : isCurrent ? C.text : C.textSec, lineHeight: 1.3 }}>
+                    {e.label}
+                  </div>
+                  <div style={{ fontSize: 10, marginTop: 2, color: (e as any).urgente ? C.red : e.done ? C.green : C.textSec }}>
+                    {(e as any).urgente ? '⚠ ' : ''}{e.fecha}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <div style={{ height: 1, background: C.border, margin: '18px 0 14px' }} />
+
+      {/* ── Botón ── */}
+      <button
+        onMouseEnter={e => (e.currentTarget.style.background = C.orangeH)}
+        onMouseLeave={e => (e.currentTarget.style.background = C.orange)}
+        style={{
+          width: '100%', padding: '13px', borderRadius: 6, border: 'none',
+          background: C.orange, color: '#fff', fontSize: 14, fontWeight: 700,
+          cursor: 'pointer', letterSpacing: '.05em', textTransform: 'uppercase',
+          transition: 'background 180ms',
+        }}>
+        Calcular Propuesta
+      </button>
+      <div style={{ textAlign: 'center', marginTop: 9, fontSize: 9, color: C.textSec, letterSpacing: '.1em', textTransform: 'uppercase' }}>
+        Evaluación de riesgo automatizada con IA
+      </div>
+    </div>
+  )
+}
+
+/* ─── Línea scan ─────────────────────────── */
+function ScanLine() {
+  const C = useTheme()
+  const [on, setOn] = useState(true)
+  useEffect(() => { const t = setTimeout(() => setOn(false), 700); return () => clearTimeout(t) }, [])
+  if (!on) return null
+  return <div style={{
+    position: 'absolute', left: 0, right: 0, height: 1, zIndex: 99, pointerEvents: 'none',
+    background: `linear-gradient(90deg, transparent, ${C.orange} 40%, #ffb380 50%, ${C.orange} 60%, transparent)`,
+    animation: 'scan-sweep 0.65s ease forwards',
+  }} />
+}
+
+/* ─── PÁGINA (Dashboard) ────────────────── */
 export default function Dashboard() {
-  const [filtro, setFiltro] = useState<'todos' | 'score70' | 'urgente' | 'grande'>('todos')
-  const [busqueda, setBusqueda] = useState('')
-  const [panelProceso, setPanelProceso] = useState<typeof PROCESOS[0] | null>(null)
-  const [hoverId, setHoverId] = useState<number | null>(null)
-  const [tooltipId, setTooltipId] = useState<number | null>(null)
-  const tickerRef = useRef<HTMLDivElement>(null)
+  const clock = useClock()
+  const [theme, setTheme] = useState<'dark'|'light'>('dark')
+  const palette = theme === 'dark' ? DARK : LIGHT
+  // Sincronizar paleta mutable con el tema activo (para sub-componentes)
+  Object.assign(C, palette)
+  // Inyectar CSS variables en el root para que el cambio sea inmediato en el DOM
+  useEffect(() => {
+    const p = theme === 'dark' ? DARK : LIGHT
+    Object.assign(C, p)
+    const r = document.documentElement.style
+    r.setProperty('--t-bg',      p.bg)
+    r.setProperty('--t-card',    p.card)
+    r.setProperty('--t-border',  p.border)
+    r.setProperty('--t-text',    p.text)
+    r.setProperty('--t-textsec', p.textSec)
+    r.setProperty('--t-orange',  p.orange)
+    r.setProperty('--t-header',  p.header)
+    r.setProperty('--t-herobg',  p.heroBg)
+    r.setProperty('--t-card2',   p.cardHover)
+  }, [theme])
+  const [filtro, setFiltro] = useState('Infraestructura')
+  const [busq, setBusq] = useState('')
+  const [activeId, setActiveId] = useState<number | null>(1)
 
-  // KPI counters
-  const encontrados  = useCounter(PROCESOS.length)
-  const totalCOP     = useCounter(Math.round(PROCESOS.reduce((a, p) => a + p.presupuesto, 0) / 1_000_000))
-  const sinRevisar   = useCounter(PROCESOS.filter(p => p.score >= 70).length)
-  const diasProximo  = useCounter(Math.min(...PROCESOS.map(p => diasRestantes(p.cierre))))
+  const [panelOpen, setPanelOpen] = useState(true)
+  const cTotal = useCounter(142)
+  const cBudget = useCounter(48)
 
-  // Filtrado
+  const filtros = ['Infraestructura', 'Servicios TI', 'Todos los sectores']
+
   const procesados = PROCESOS.filter(p => {
-    if (busqueda && !p.entidad.toLowerCase().includes(busqueda.toLowerCase()) &&
-        !p.objeto.toLowerCase().includes(busqueda.toLowerCase())) return false
-    if (filtro === 'score70') return p.score >= 70
-    if (filtro === 'urgente') return diasRestantes(p.cierre) <= 7
-    if (filtro === 'grande')  return p.presupuesto >= 1_000_000_000
+    const sectorMap: Record<string,string> = { 'Infraestructura': 'Infrastructure', 'Servicios TI': 'Tech Services' }
+    if (filtro !== 'Todos los sectores' && p.sector !== sectorMap[filtro]) return false
+    if (busq && !p.entidad.toLowerCase().includes(busq.toLowerCase()) && !p.objeto.toLowerCase().includes(busq.toLowerCase())) return false
     return true
   })
 
-  const tickerItems = [...ACTIVIDAD, ...ACTIVIDAD]
+  const activeProceso = PROCESOS.find(p => p.id === activeId) ?? null
+  const urgentes = PROCESOS.filter(p => new Date(p.cierre).getTime() - Date.now() < 86400000 * 2).length
+
+  const METRICAS = [
+    {
+      label: 'OPORTUNIDADES HOY', val: `${cTotal}`, detail: '+12% vs ayer',
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>,
+      urgent: false,
+    },
+    {
+      label: 'PRESUPUESTO TOTAL (COP)', val: `$${cBudget}.8T`, detail: 'Valor agregado',
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>,
+      urgent: false,
+    },
+    {
+      label: 'CIERRES URGENTES', val: `${urgentes}`, detail: 'Cierre en menos de 48h',
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+      urgent: true,
+    },
+    {
+      label: 'COMPATIBILIDAD ALTA', val: `${PROCESOS.filter(p => p.score >= 80).length * 13}%`, detail: 'Verificado por IA',
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+      urgent: false,
+    },
+  ]
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-
+    <div key={theme} style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       {/* ── HEADER ── */}
       <header style={{
-        height: 52,
-        background: '#1e3a5f',
-        borderBottom: '1px solid #16304f',
-        display: 'flex', alignItems: 'center',
-        padding: '0 28px',
+        background: C.header, borderBottom: `1px solid ${C.border}`, height: 56,
+        display: 'flex', alignItems: 'center', padding: '0 28px',
         position: 'sticky', top: 0, zIndex: 40,
-        boxShadow: '0 2px 8px rgba(30,58,95,0.2)',
-        overflow: 'hidden',
+        boxShadow: '0 2px 20px rgba(0,0,0,.5)',
       }}>
         <ScanLine />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative', zIndex: 1 }}>
-          {/* Punto con pulse suave + tooltip */}
-          <div style={{ position: 'relative' }} className="status-dot-wrap">
-            <span
-              className="pulse-status"
-              title="Sistema activo — monitoreando SECOP II"
-              style={{
-                display: 'inline-block', width: 9, height: 9, borderRadius: '50%',
-                background: '#e8601c', cursor: 'default',
-              }}
-            />
-          </div>
-          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '0.06em', color: '#ffffff' }}>
-            SECOP RADAR
-          </span>
-          <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginLeft: 4 }}>
-            monitoreando SECOP II en tiempo real
-          </span>
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 32 }}>
+          <span className="pulse-status" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: C.orange, flexShrink: 0 }} />
+          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '3px', color: C.text, textTransform: 'uppercase' }}>SECOP RADAR</span>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 20, position: 'relative', zIndex: 1 }}>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
-            <LiveClock />
-          </span>
-          <div style={{
-            width: 6, height: 6, borderRadius: '50%', background: '#4ade80',
-            boxShadow: '0 0 6px rgba(74,222,128,0.9)',
-          }} />
-          <span style={{ fontSize: 11, color: '#4ade80', letterSpacing: '0.04em' }}>SISTEMA ACTIVO</span>
+        {/* Nav izquierda + Mis Propuestas juntos */}
+        <nav style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          {(['Dashboard', 'Clientes', 'Historial', 'Configuración'] as const).map((n, i) => (
+            <button key={n} style={{
+              background: i === 0 ? 'rgba(249,115,22,.12)' : 'none',
+              border: i === 0 ? `1px solid rgba(249,115,22,.25)` : '1px solid transparent',
+              color: i === 0 ? C.orange : C.textSec, padding: '5px 14px', borderRadius: 5,
+              fontSize: 13, cursor: 'pointer', fontWeight: i === 0 ? 600 : 400,
+              transition: 'all 150ms',
+            }}
+              onMouseEnter={e => { if (i > 0) e.currentTarget.style.color = C.text }}
+              onMouseLeave={e => { if (i > 0) e.currentTarget.style.color = C.textSec }}
+            >{n}</button>
+          ))}
+          <div style={{ width: 1, height: 20, background: C.border, margin: '0 8px' }} />
+          <MisPropuestasDropdown />
+        </nav>
+        {/* Derecha */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12, color: C.textSec }}>{clock}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: C.orange }} className="pulse-status" />
+            <span style={{ fontSize: 12, color: C.orange, fontWeight: 600, letterSpacing: '.06em' }}>LIVE SYNC ACTIVE</span>
+          </div>
+          <div style={{ width: 1, height: 18, background: C.border }} />
+          <button
+            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            style={{
+              width: 30, height: 30, borderRadius: 6,
+              background: 'transparent', border: `1px solid ${C.border}`,
+              color: C.textSec, fontSize: 14, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'border-color 150ms, color 150ms',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.orange; e.currentTarget.style.color = C.orange }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textSec }}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
         </div>
       </header>
 
-      {/* ── HERO KPIs ── */}
-      <div className="fade-in-up" style={{
-        background: '#e8601c',
-        borderBottom: '1px solid #d4541a',
-        padding: '28px 28px',
-      }}>
-        <div style={{ display: 'flex', gap: 16, maxWidth: 1400, margin: '0 auto' }}>
-          <KpiCard label="Encontrados hoy" sub="+3 vs ayer ↑">
-            {encontrados}
-          </KpiCard>
-          <KpiCard label="En oportunidades" sub="COP disponibles">
-            ${totalCOP.toLocaleString('es-CO')}M
-          </KpiCard>
-          <KpiCard label="Para analizar" sub="score ≥70, sin revisar">
-            {sinRevisar}
-          </KpiCard>
-          <KpiCard label="Próximo cierre" sub="⚠ urgente">
-            <span style={{ color: diasProximo <= 7 ? '#c0392b' : '#1a1714' }}>
-              {diasProximo} días
-            </span>
-          </KpiCard>
-        </div>
-      </div>
+      {/* ── BODY ── */}
+      <div style={{ height: 'calc(100vh - 56px)', display: 'flex', position: 'relative', zIndex: 1, overflow: 'hidden' }}>
 
-      {/* ── TABLA ── */}
-      <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        <ParticlesCanvas />
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: 1400, width: '100%', margin: '0 auto', padding: '28px 28px' }}>
+        {/* ── COLUMNA IZQUIERDA — ocupa lo que deja el panel ── */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 28px 28px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-        {/* toolbar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 16 }}>
-          <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: '#1a1714' }}>
-              Oportunidades compatibles hoy
-            </h2>
-            <p style={{ color: 'var(--text-sec)', fontSize: 12, marginTop: 2 }}>
-              {procesados.length} proceso{procesados.length !== 1 ? 's' : ''} · ordenados por compatibilidad
-            </p>
+          {/* ─ Hero: Título + Métricas con radar de fondo ─ */}
+          <div style={{
+            position: 'relative', borderRadius: 10,
+            background: C.heroBg,
+            border: `1px solid ${C.border}`,
+            padding: '28px 28px 24px',
+            clipPath: 'inset(0 round 10px)',
+          }}>
+            <Particles />
+            {/* Título */}
+            <div style={{ position: 'relative', zIndex: 1, marginBottom: 20 }}>
+              <h1 style={{ fontSize: 34, fontWeight: 700, color: C.text, lineHeight: 1, marginBottom: 6 }}>Control de Licitaciones</h1>
+              <p style={{ fontSize: 13, color: C.textSec }}>Monitoreo automatizado de contratación pública en SECOP II — Colombia.</p>
+            </div>
+
+            {/* ─ Métricas ─ */}
+            <div style={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+              {METRICAS.map((m, i) => (
+                <div key={i} style={{
+                  background: `${C.card}cc`, backdropFilter: 'blur(6px)',
+                  borderTop: `1px solid ${m.urgent ? C.orange : C.border}`,
+                  borderRight: `1px solid ${m.urgent ? C.orange : C.border}`,
+                  borderBottom: `1px solid ${m.urgent ? C.orange : C.border}`,
+                  borderLeft: `1px solid ${m.urgent ? C.orange : C.border}`,
+                  borderRadius: 8, padding: '18px 18px 16px',
+                  boxShadow: m.urgent ? `0 0 16px rgba(249,115,22,.2)` : 'none',
+                }}>
+                  <div style={{ marginBottom: 12 }}>{m.icon}</div>
+                  <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 8 }}>{m.label}</div>
+                  <div style={{ fontSize: 40, fontWeight: 700, color: C.text, lineHeight: 1, letterSpacing: '-1.5px', marginBottom: 8 }}>{m.val}</div>
+                  <div style={{ fontSize: 11, color: m.urgent ? C.red : C.orange }}>{m.detail}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <input
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-            placeholder="Buscar entidad u objeto..."
-            style={{
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 4, padding: '8px 14px', color: 'var(--text)',
-              fontSize: 13, outline: 'none', width: 260,
-            }}
-          />
+
+          {/* ─ Filtros + search ─ */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>Oportunidades activas</div>
+              <div style={{ fontSize: 12, color: C.textSec }}>{procesados.length} procesos compatibles</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {filtros.map(f => (
+                <button key={f} onClick={() => setFiltro(f)} style={{
+                  padding: '6px 16px', borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                  background: filtro === f ? C.orange : 'transparent',
+                  border: `1px solid ${filtro === f ? C.orange : C.border}`,
+                  color: filtro === f ? '#fff' : C.textSec,
+                  transition: 'all 160ms',
+                }}>{f}</button>
+              ))}
+              <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Search..."
+                style={{
+                  background: C.card, border: `1px solid ${C.border}`, borderRadius: 6,
+                  padding: '6px 14px', color: C.text, fontSize: 13, outline: 'none', width: 160,
+                }} />
+            </div>
+          </div>
+
+          {/* ─ Grid de cards ─ */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            {procesados.map((p, i) => (
+              <div key={p.id} className="row-enter" style={{ animationDelay: `${i * 60}ms` }}>
+                <ProcesoCard p={p} active={activeId === p.id} onClick={() => setActiveId(p.id === activeId ? null : p.id)} />
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* filtros rápidos */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-          {([
-            ['todos',   'Todos'],
-            ['score70', 'Score ≥70'],
-            ['urgente', 'Cierre urgente'],
-            ['grande',  '>$1.000M'],
-          ] as const).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setFiltro(key)}
-              style={{
-                padding: '6px 14px', borderRadius: 4, fontSize: 12, fontWeight: 500,
-                border: '1px solid',
-                borderColor: filtro === key ? '#e8601c' : 'var(--border)',
-                background: filtro === key ? 'rgba(232,96,28,0.08)' : 'transparent',
-                color: filtro === key ? '#e8601c' : 'var(--text-sec)',
-                cursor: 'pointer',
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* tabla */}
-        <div className="fade-in-up" style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 6,
-          overflow: 'hidden',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+        {/* ── STRIP TOGGLE — entre columnas ── */}
+        <div style={{
+          width: 0, position: 'relative', flexShrink: 0, zIndex: 20,
         }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#f0ede8', borderBottom: '1px solid var(--border)' }}>
-                {['SCORE','ENTIDAD','OBJETO','PRESUPUESTO','CIERRE','ACCIÓN'].map(col => (
-                  <th key={col} style={{
-                    padding: '11px 16px', textAlign: col === 'PRESUPUESTO' ? 'right' : 'left',
-                    fontSize: 10, fontWeight: 500, letterSpacing: '0.1em',
-                    textTransform: 'uppercase', color: 'var(--text-sec)',
-                  }}>{col}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {procesados.map((p, i) => {
-                const dias = diasRestantes(p.cierre)
-                const isHover = hoverId === p.id
-                return (
-                  <tr
-                    key={p.id}
-                    onMouseEnter={() => setHoverId(p.id)}
-                    onMouseLeave={() => setHoverId(null)}
-                    className="row-enter"
-                    style={{
-                      borderBottom: i < procesados.length - 1 ? '1px solid var(--border)' : 'none',
-                      background: isHover ? '#f0ede8' : 'transparent',
-                      transition: 'background 150ms, box-shadow 150ms',
-                      animationDelay: `${i * 80}ms`,
-                      boxShadow: isHover ? 'inset 4px 0 0 #e8601c' : 'inset 4px 0 0 transparent',
-                    }}
-                  >
-                    {/* score badge SVG */}
-                    <td style={{ padding: '14px 16px' }}>
-                      <ScoreBadge score={p.score} delay={i * 80 + 400} />
-                    </td>
-
-                    {/* entidad */}
-                    <td style={{ padding: '14px 16px', minWidth: 180 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: '#1a1714' }}>{p.entidad}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 3 }}>{p.departamento}</div>
-                    </td>
-
-                    {/* objeto con tooltip */}
-                    <td
-                      style={{ padding: '14px 16px', maxWidth: 300, position: 'relative' }}
-                      onMouseEnter={() => setTooltipId(p.id)}
-                      onMouseLeave={() => setTooltipId(null)}
-                    >
-                      <div style={{
-                        fontSize: 12, color: 'var(--text-sec)', lineHeight: 1.5,
-                        overflow: 'hidden', display: '-webkit-box',
-                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                      }}>
-                        {p.objeto}
-                      </div>
-                      {tooltipId === p.id && (
-                        <div style={{
-                          position: 'absolute', left: 0, top: '100%', zIndex: 30,
-                          background: '#ffffff', border: '1px solid var(--border)',
-                          borderRadius: 4, padding: '10px 14px',
-                          fontSize: 12, color: 'var(--text)', lineHeight: 1.6,
-                          width: 340, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                          pointerEvents: 'none',
-                        }}>
-                          {p.objeto}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* presupuesto */}
-                    <td style={{ padding: '14px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <span style={{
-                        fontSize: 14, fontWeight: 700,
-                        color: p.presupuesto >= 1_000_000_000 ? '#15803d' : '#1a1714',
-                      }}>
-                        {fmtCOP(p.presupuesto)}
-                      </span>
-                    </td>
-
-                    {/* cierre */}
-                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                      <div style={{ fontSize: 12, color: 'var(--text)' }}>{fmtFecha(p.cierre)}</div>
-                      <div style={{
-                        fontSize: 11, fontWeight: 600, marginTop: 3,
-                        color: dias <= 3 ? '#c0392b' : dias <= 7 ? '#b45309' : 'var(--text-sec)',
-                      }}>
-                        {dias <= 0 ? 'CERRADO' : `${dias}d restantes`}
-                        {dias <= 7 && dias > 0 && ' ⚠'}
-                      </div>
-                    </td>
-
-                    {/* acción */}
-                    <td style={{ padding: '14px 16px' }}>
-                      <button
-                        onClick={() => setPanelProceso(p)}
-                        style={{
-                          background: isHover ? '#e8601c' : 'rgba(232,96,28,0.08)',
-                          border: '1px solid rgba(232,96,28,0.35)',
-                          color: isHover ? '#fff' : '#e8601c',
-                          padding: '7px 14px', borderRadius: 4, fontSize: 12, fontWeight: 600,
-                          cursor: 'pointer', transition: 'all 100ms', whiteSpace: 'nowrap',
-                        }}
-                      >
-                        Analizar →
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <button
+            onClick={() => setPanelOpen(o => !o)}
+            title={panelOpen ? 'Colapsar panel' : 'Expandir seguimiento'}
+            style={{
+              position: 'absolute', left: -14, top: 20,
+              width: 28, height: 28, borderRadius: '50%',
+              background: C.card, border: `1px solid ${C.border}`,
+              color: C.textSec, fontSize: 13, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,.4)',
+              transition: 'background 160ms, color 160ms',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = C.orange; e.currentTarget.style.color = '#fff' }}
+            onMouseLeave={e => { e.currentTarget.style.background = C.card; e.currentTarget.style.color = C.textSec }}
+          >
+            {panelOpen ? '›' : '‹'}
+          </button>
         </div>
-        </div>
-      </main>
 
-      {/* ── TICKER INFERIOR ── */}
-      <div style={{
-        borderTop: '1px solid #16304f',
-        background: '#1e3a5f',
-        height: 36, overflow: 'hidden',
-        display: 'flex', alignItems: 'center',
-      }}>
-        <div
-          ref={tickerRef}
-          style={{
-            display: 'flex', gap: 64, whiteSpace: 'nowrap',
-            animation: 'ticker-scroll 40s linear infinite',
-          }}
-        >
-          {tickerItems.map((a, i) => (
-            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-              <span className="pulse-dot" style={{
-                display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
-                background: a.color, flexShrink: 0,
-              }} />
-              <span style={{ color: 'rgba(255,255,255,0.65)' }}>{a.msg}</span>
-              <span style={{ color: 'rgba(255,255,255,0.2)' }}>—</span>
-              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>{a.tiempo}</span>
-            </span>
-          ))}
+        {/* ── COLUMNA DERECHA — colapsable ── */}
+        <div style={{
+          width: panelOpen ? 380 : 40,
+          minWidth: panelOpen ? 380 : 40,
+          borderLeft: `1px solid ${C.border}`,
+          background: C.card, overflowY: panelOpen ? 'auto' : 'hidden',
+          display: 'flex', flexDirection: 'column',
+          transition: 'width 280ms ease, min-width 280ms ease',
+          position: 'relative', flexShrink: 0,
+        }}>
+          {/* Etiqueta vertical cuando colapsado */}
+          {!panelOpen && (
+            <div style={{
+              position: 'absolute', top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%) rotate(-90deg)',
+              whiteSpace: 'nowrap', fontSize: 10, fontWeight: 600,
+              color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase',
+              pointerEvents: 'none',
+            }}>Seguimiento</div>
+          )}
+
+          {/* Contenido — se oculta al colapsar */}
+          <div style={{
+            padding: '22px 22px 24px',
+            opacity: panelOpen ? 1 : 0,
+            transition: 'opacity 180ms ease',
+            pointerEvents: panelOpen ? 'auto' : 'none',
+            minWidth: 336,
+          }}>
+            <ProposalTracker proceso={activeProceso} />
+          </div>
         </div>
       </div>
-
-      {/* ── OVERLAY ── */}
-      {panelProceso && (
-        <>
-          <div
-            onClick={() => setPanelProceso(null)}
-            style={{
-              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-              zIndex: 49, backdropFilter: 'blur(2px)',
-            }}
-          />
-          <PanelLateral proceso={panelProceso} onClose={() => setPanelProceso(null)} />
-        </>
-      )}
     </div>
   )
 }
