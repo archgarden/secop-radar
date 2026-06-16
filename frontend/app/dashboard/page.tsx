@@ -1037,7 +1037,7 @@ export default function Dashboard() {
         background: C.header, borderBottom: `1px solid ${C.border}`, height: 56,
         display: 'flex', alignItems: 'center', padding: '0 28px',
         position: 'sticky', top: 0, zIndex: 40,
-        boxShadow: '0 2px 20px rgba(0,0,0,.5)',
+        boxShadow: '0 2px 20px rgba(0,0,0,.5)', overflow: 'hidden',
       }}>
         <ScanLine />
         {/* Logo */}
