@@ -979,7 +979,16 @@ export default function Dashboard() {
   const presupuestoTotal = PROCESOS_COMPATIBLES.reduce((a, p) => a + p.presupuesto, 0)
   const cBudget = useCounter(Math.round(presupuestoTotal / 1_000_000_000))
 
-  const deptosUnicos = ['Todos', ...Array.from(new Set(PROCESOS.map(p => p.departamento))).sort()]
+  const DEPTOS_COLOMBIA = [
+    'AMAZONAS', 'ANTIOQUIA', 'ARAUCA', 'ATLÁNTICO', 'BOGOTÁ D.C.',
+    'BOLÍVAR', 'BOYACÁ', 'CALDAS', 'CAQUETÁ', 'CASANARE', 'CAUCA',
+    'CESAR', 'CHOCÓ', 'CÓRDOBA', 'CUNDINAMARCA', 'GUAINÍA',
+    'GUAVIARE', 'HUILA', 'LA GUAJIRA', 'MAGDALENA', 'META',
+    'NARIÑO', 'NORTE DE SANTANDER', 'PUTUMAYO', 'QUINDÍO',
+    'RISARALDA', 'SAN ANDRÉS', 'SANTANDER', 'SUCRE', 'TOLIMA',
+    'VALLE DEL CAUCA', 'VAUPÉS', 'VICHADA',
+  ]
+  const deptosUnicos = ['Todos', ...DEPTOS_COLOMBIA]
   const tiposUnicos = ['Todos', 'Infraestructura vial', 'Adecuaciones', 'Construcciones']
   const filtros = ['Todos', 'Alta compat.', 'Media compat.', 'Cierre urgente']
 
