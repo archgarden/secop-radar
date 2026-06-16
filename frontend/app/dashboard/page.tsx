@@ -114,6 +114,17 @@ const ETAPAS_SECOP = [
   { label: 'Adjudicación del contrato',       done: false,   fecha: 'estimado: +20 días' },
 ]
 
+const CONTRATOS_SIMILARES = [
+  { entidad: 'INVIAS',                    proveedor: 'CONSORCIO VIAL BOGOTÁ 2025',       valor: 11800000000,  modalidad: 'Licitación pública',      fecha: '2025-11-14' },
+  { entidad: 'IDU Bogotá',                proveedor: 'UNIÓN TEMPORAL MALLA VIAL SUR',     valor: 8900000000,   modalidad: 'Licitación pública',      fecha: '2025-09-02' },
+  { entidad: 'Gobernación de Cundinamarca',proveedor:'CONSORCIO INFRAESTRUCTURA CUN 2024',valor: 6400000000,   modalidad: 'Licitación pública',      fecha: '2025-06-20' },
+  { entidad: 'Alcaldía de Bogotá',        proveedor: 'PAVIMENTAR S.A.S.',                 valor: 2300000000,   modalidad: 'Selección abreviada',     fecha: '2025-04-10' },
+  { entidad: 'INVIAS',                    proveedor: 'CONSTRUCTORA ANDINA LTDA',          valor: 15000000000,  modalidad: 'Licitación pública',      fecha: '2025-02-28' },
+  { entidad: 'Gobernación de Boyacá',     proveedor: 'CONSORCIO OBRAS BOYACÁ',            valor: 4200000000,   modalidad: 'Licitación pública',      fecha: '2024-12-15' },
+  { entidad: 'IDU Bogotá',                proveedor: 'UNIÓN TEMPORAL PUENTES BOGOTÁ',     valor: 7200000000,   modalidad: 'Licitación pública',      fecha: '2024-10-01' },
+  { entidad: 'Alcaldía de Villavicencio', proveedor: 'VÍAS Y PAVIMENTOS LLANO S.A.S.',   valor: 1900000000,   modalidad: 'Selección abreviada',     fecha: '2024-08-18' },
+]
+
 /* ─── Utils ───────────────────────────────── */
 function fmtCOP(n: number) {
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1).replace('.', ',')}B`
@@ -589,7 +600,7 @@ function ProcesoCard({ p, onClick, active }: { p: ProcesoData; onClick: () => vo
 function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
   const C = useTheme()
   const [docStatuses, setDocStatuses] = useState<DocStatus[]>(DOCS_SECOP.map(d => d.status))
-  const [tab, setTab] = useState<'docs' | 'aiu' | 'etapas'>('docs')
+  const [tab, setTab] = useState<'docs' | 'aiu' | 'contratos' | 'etapas'>('docs')
 
   // ── Calculadora AIU state ──
   const [costosDirectos, setCostosDirectos] = useState('')
@@ -703,10 +714,10 @@ function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
       </div>
 
       {/* ── Tabs ── */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-        {([['docs', 'Documentos'], ['aiu', 'Calculadora AIU'], ['etapas', 'Etapas SECOP II']] as const).map(([key, label]) => (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 14 }}>
+        {([['docs', 'Documentos'], ['aiu', 'Calculadora AIU'], ['contratos', 'Contratos Similares'], ['etapas', 'Etapas SECOP II']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{
-            flex: 1, padding: '7px 4px', borderRadius: 5, fontSize: 10, fontWeight: 600,
+            padding: '7px 4px', borderRadius: 5, fontSize: 9, fontWeight: 600,
             border: `1px solid ${tab === key ? C.orange : C.border}`,
             background: tab === key ? 'rgba(249,115,22,.12)' : C.bg,
             color: tab === key ? C.orange : C.textSec,
@@ -895,6 +906,53 @@ function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── CONTRATOS SIMILARES ── */}
+      {tab === 'contratos' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 2 }}>
+            Histórico de adjudicaciones — {CLIENTE_DEMO.unspsc_labels[0]} / {CLIENTE_DEMO.unspsc_labels[1]}
+          </div>
+          <div style={{ fontSize: 9, color: C.textSec, marginBottom: 8 }}>
+            Contratos recientes en los mismos códigos UNSPSC y departamentos del cliente. Fuente: SECOP II — datos abiertos.
+          </div>
+
+          {CONTRATOS_SIMILARES.map((c, i) => (
+            <div key={i} style={{
+              padding: '10px 12px', background: C.bg,
+              border: `1px solid ${C.border}`, borderRadius: 6,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, flex: 1, minWidth: 0 }}>
+                  {c.proveedor.length > 28 ? c.proveedor.slice(0, 26) + '…' : c.proveedor}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.orange, flexShrink: 0, marginLeft: 8 }}>
+                  {fmtCOP(c.valor)}
+                </span>
+              </div>
+              <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>{c.entidad} — {c.fecha}</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span style={{ fontSize: 8, padding: '1px 6px', borderRadius: 3, background: 'rgba(245,158,11,.15)', color: '#f59e0b', fontWeight: 600 }}>
+                  {c.modalidad}
+                </span>
+              </div>
+            </div>
+          ))}
+
+          <div style={{
+            marginTop: 6, padding: '10px 12px',
+            background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.2)', borderRadius: 6,
+          }}>
+            <div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginBottom: 4 }}>
+              Inteligencia de mercado
+            </div>
+            <div style={{ fontSize: 10, color: C.textSec, lineHeight: 1.5 }}>
+              Ticket promedio: <span style={{ color: C.text, fontWeight: 600 }}>{fmtCOP(Math.round(CONTRATOS_SIMILARES.reduce((a, c) => a + c.valor, 0) / CONTRATOS_SIMILARES.length))}</span><br />
+              Competidores activos: <span style={{ color: C.orange, fontWeight: 600 }}>{new Set(CONTRATOS_SIMILARES.map(c => c.proveedor)).size}</span> en {CLIENTE_DEMO.departamentos.length} deptos.
+            </div>
+          </div>
         </div>
       )}
 

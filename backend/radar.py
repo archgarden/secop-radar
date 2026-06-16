@@ -15,6 +15,7 @@ from models import Cliente, LogEjecucion, Proceso, ProcesoCliente
 load_dotenv()
 
 SOCRATA_URL = "https://www.datos.gov.co/resource/p6dx-8zbt.json"
+SOCRATA_CONTRATOS_URL = "https://www.datos.gov.co/resource/jbjy-vk9h.json"
 SOCRATA_CLIENT_ID = os.getenv("SOCRATA_CLIENT_ID", "")
 SOCRATA_CLIENT_SECRET = os.getenv("SOCRATA_CLIENT_SECRET", "")
 
@@ -290,3 +291,78 @@ def correr_radar(cliente_id: int, db: Session) -> list[Proceso]:
     db.commit()
 
     return nuevos
+
+
+def consultar_contratos_similares(
+    unspsc_codes: list[str],
+    departamentos: list[str],
+    limit: int = 25,
+) -> list[dict]:
+    """Consulta contratos históricos adjudicados (jbjy-vk9h) filtrados por
+    UNSPSC y departamento. Devuelve datos de inteligencia de mercado:
+    quién ganó, por cuánto, en qué modalidad.
+    """
+    auth = _auth()
+    unspsc_prefixes = [c[:4] for c in unspsc_codes]
+
+    # Construir WHERE para SoQL
+    conditions: list[str] = []
+
+    if unspsc_prefixes:
+        unspsc_clauses = [
+            f"codigo_de_categoria_principal like 'V1.{p}%'"
+            for p in unspsc_prefixes
+        ]
+        conditions.append("(" + " OR ".join(unspsc_clauses) + ")")
+
+    if departamentos:
+        dep_clauses: list[str] = []
+        for d in departamentos:
+            safe = d.replace("'", "''")
+            dep_clauses.append(f"upper(departamento) like upper('%{safe}%')")
+        conditions.append("(" + " OR ".join(dep_clauses) + ")")
+
+    where = " AND ".join(conditions) if conditions else ""
+
+    params: dict[str, Any] = {
+        "$limit": limit,
+        "$order": "fecha_de_firma DESC",
+        "$select": (
+            "nombre_entidad, proveedor_adjudicado, valor_del_contrato, "
+            "codigo_de_categoria_principal, descripcion_del_proceso, "
+            "modalidad_de_contratacion, estado_contrato, "
+            "fecha_de_firma, departamento, urlproceso"
+        ),
+    }
+    if where:
+        params["$where"] = where
+
+    ultimo_error: Exception | None = None
+    for intento in range(1, MAX_REINTENTOS + 1):
+        try:
+            r = requests.get(
+                SOCRATA_CONTRATOS_URL,
+                auth=auth,
+                params=params,
+                timeout=30,
+            )
+            r.raise_for_status()
+            data: list[dict] = r.json()
+            # Limpiar urlproceso (viene como objeto {url: ...})
+            for item in data:
+                url = item.get("urlproceso")
+                if isinstance(url, dict):
+                    item["urlproceso"] = url.get("url", "")
+            return data
+        except requests.RequestException as exc:
+            ultimo_error = exc
+            logger.warning(
+                "Intento %d/%d falló al consultar contratos: %s",
+                intento, MAX_REINTENTOS, exc,
+            )
+            if intento < MAX_REINTENTOS:
+                time.sleep(ESPERA_REINTENTO_S)
+
+    raise RuntimeError(
+        f"Consulta de contratos falló tras {MAX_REINTENTOS} reintentos: {ultimo_error}"
+    )

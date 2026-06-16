@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from database import Base, SessionLocal, engine, get_db
 from models import Cliente, LogEjecucion, Proceso, ProcesoCliente
 from notificaciones import enviar_alerta_nuevos_procesos
-from radar import correr_radar
+from radar import consultar_contratos_similares, correr_radar
 
 logger = logging.getLogger("main")
 
@@ -239,3 +239,21 @@ def listar_logs(db: Session = Depends(get_db)):
         .limit(50)
         .all()
     )
+
+
+@app.get("/clientes/{cliente_id}/contratos-similares")
+def contratos_similares(cliente_id: int, db: Session = Depends(get_db)):
+    import json
+
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    departamentos = json.loads(cliente.departamentos or "[]")
+    unspsc_codes = json.loads(cliente.unspsc_codes or "[]")
+
+    try:
+        return consultar_contratos_similares(unspsc_codes, departamentos)
+    except Exception as exc:
+        logger.exception("Error consultando contratos similares: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc))
