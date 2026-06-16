@@ -48,12 +48,6 @@ input  { font-family: inherit; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes scan-sweep {
-  0%   { top: 0%;   opacity: 1; }
-  85%  { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
-}
-
 @keyframes slide-in-right {
   from { transform: translateX(100%); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }

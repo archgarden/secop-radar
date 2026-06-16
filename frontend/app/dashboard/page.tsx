@@ -933,19 +933,6 @@ function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
   )
 }
 
-/* ─── Línea scan ─────────────────────────── */
-function ScanLine() {
-  const C = useTheme()
-  const [on, setOn] = useState(true)
-  useEffect(() => { const t = setTimeout(() => setOn(false), 700); return () => clearTimeout(t) }, [])
-  if (!on) return null
-  return <div style={{
-    position: 'absolute', left: 0, right: 0, height: 1, zIndex: 99, pointerEvents: 'none',
-    background: `linear-gradient(90deg, transparent, ${C.orange} 40%, #ffb380 50%, ${C.orange} 60%, transparent)`,
-    animation: 'scan-sweep 0.65s ease forwards',
-  }} />
-}
-
 /* ─── PÁGINA (Dashboard) ────────────────── */
 export default function Dashboard() {
   const clock = useClock()
@@ -1039,7 +1026,6 @@ export default function Dashboard() {
         position: 'sticky', top: 0, zIndex: 40,
         boxShadow: '0 2px 20px rgba(0,0,0,.5)', overflow: 'hidden',
       }}>
-        <ScanLine />
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 32 }}>
           <span className="pulse-status" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: C.orange, flexShrink: 0 }} />
