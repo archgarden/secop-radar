@@ -28,6 +28,7 @@ interface ProcesoData {
   departamento: string
   unspsc: string
   unspscLabel: string
+  tipo: string
   sector: string
   objeto: string
   presupuesto: number
@@ -42,20 +43,20 @@ interface ProcesoData {
 }
 
 const PROCESOS: ProcesoData[] = [
-  { id: 1,  entidad: 'Alcaldía de Bogotá',          idProceso: 'SECOP-2026-INF-089',   departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Construcción y rehabilitación de malla vial local en las localidades de Kennedy, Bosa y Ciudad Bolívar — Grupo 3',                         presupuesto: 1200000000,  cierre: new Date(Date.now() + 1.5  * 86400000).toISOString(), docs: 12 },
-  { id: 2,  entidad: 'INVIAS',                       idProceso: 'INVIAS-LP-2026-117',    departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Rehabilitación de la carretera Bogotá–Villeta, sector La Vega–Villeta, corredor nacional Ruta 50',                                            presupuesto: 5200000000,  cierre: new Date(Date.now() + 22   * 86400000).toISOString(), docs: 10 },
-  { id: 3,  entidad: 'Gobernación de Boyacá',        idProceso: 'BOY-LP-2026-042',       departamento: 'BOYACÁ',            unspsc: '72120000', unspscLabel: 'Edificación',     sector: 'Infrastructure',  objeto: 'Construcción de 12 sedes educativas rurales en municipios no certificados del departamento de Boyacá — Fase II',                                   presupuesto: 3800000000,  cierre: new Date(Date.now() + 30   * 86400000).toISOString(), docs: 15 },
-  { id: 4,  entidad: 'Alcaldía de Villavicencio',    idProceso: 'VCIO-LP-2026-018',      departamento: 'META',              unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Mejoramiento y pavimentación de vías terciarias en los corregimientos de Apiay, Pompeya y La Concepción',                                           presupuesto: 2100000000,  cierre: new Date(Date.now() + 14   * 86400000).toISOString(), docs: 8 },
-  { id: 5,  entidad: 'Gobernación de Cundinamarca',  idProceso: 'CUN-LP-2026-076',       departamento: 'CUNDINAMARCA',      unspsc: '72120000', unspscLabel: 'Edificación',     sector: 'Infrastructure',  objeto: 'Construcción del nuevo hospital regional de segundo nivel en Fusagasugá — incluye dotación biomédica',                                          presupuesto: 8400000000,  cierre: new Date(Date.now() + 5    * 86400000).toISOString(), docs: 18 },
-  { id: 6,  entidad: 'Gobernación del Valle',        idProceso: 'GVAL-CIV-2026-091',     departamento: 'VALLE DEL CAUCA',   unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Construcción de centros de desarrollo infantil en tres municipios no certificados del departamento del Valle del Cauca',                         presupuesto: 4500000000,  cierre: new Date(Date.now() + 18   * 86400000).toISOString(), docs: 14 },
-  { id: 7,  entidad: 'Ministerio de Vivienda',       idProceso: 'MINV-AGU-2026-112',     departamento: 'CHOCÓ',             unspsc: '72120000', unspscLabel: 'Edificación',     sector: 'Infrastructure',  objeto: 'Suministro e instalación de sistemas de potabilización para comunidades rurales en el departamento de Chocó',                                     presupuesto: 850000000,   cierre: new Date(Date.now() + 28   * 86400000).toISOString(), docs: 9 },
-  { id: 8,  entidad: 'Metro de Medellín',            idProceso: 'MET-2026-TR-004',       departamento: 'ANTIOQUIA',         unspsc: '81100000', unspscLabel: 'Consultoría',     sector: 'Tech Services',    objeto: 'Consultoría para la expansión de la línea A del sistema masivo de transporte — estudios de prefactibilidad y diseños de detalle',               presupuesto: 3400000000,  cierre: new Date(Date.now() + 45   * 86400000).toISOString(), docs: 11 },
-  { id: 9,  entidad: 'MinTIC',                       idProceso: 'CTIC-2026-DIG-031',     departamento: 'BOGOTÁ D.C.',       unspsc: '81100000', unspscLabel: 'Consultoría',     sector: 'Tech Services',    objeto: 'Implementación de infraestructura de conectividad digital en zonas rurales y municipios PDET — fase III',                                        presupuesto: 1900000000,  cierre: new Date(Date.now() + 35   * 86400000).toISOString(), docs: 7 },
-  { id: 10, entidad: 'INVIAS',                       idProceso: 'INVIAS-MET-2026-088',   departamento: 'META',              unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Construcción de la segunda calzada Villavicencio–Puerto López, tramo 3 — obras de drenaje y estabilización de taludes',                         presupuesto: 12000000000, cierre: new Date(Date.now() + 25   * 86400000).toISOString(), docs: 16 },
-  { id: 11, entidad: 'Gobernación del Meta',         idProceso: 'META-LP-2026-055',      departamento: 'META',              unspsc: '72120000', unspscLabel: 'Edificación',     sector: 'Infrastructure',  objeto: 'Construcción de vivienda de interés prioritario en los municipios de Granada, San Martín y Puerto Gaitán — 340 unidades',                      presupuesto: 6200000000,  cierre: new Date(Date.now() + 20   * 86400000).toISOString(), docs: 13 },
-  { id: 12, entidad: 'Alcaldía de Tunja',            idProceso: 'TUN-LP-2026-029',       departamento: 'BOYACÁ',            unspsc: '72150000', unspscLabel: 'Mantenimiento',   sector: 'Infrastructure',  objeto: 'Mantenimiento correctivo y preventivo de la red vial urbana del municipio de Tunja — incluye señalización horizontal y vertical',              presupuesto: 400000000,   cierre: new Date(Date.now() + 10   * 86400000).toISOString(), docs: 6 },
-  { id: 13, entidad: 'IDU Bogotá',                   idProceso: 'IDU-LP-2026-141',       departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Construcción del intercambiador vial Avenida Boyacá con Calle 13 — puentes vehiculares y deprimidos — lote 2',                                presupuesto: 9800000000,  cierre: new Date(Date.now() + 35   * 86400000).toISOString(), docs: 20 },
-  { id: 14, entidad: 'Fondo Adaptación',             idProceso: 'FAD-LP-2026-063',       departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      sector: 'Infrastructure',  objeto: 'Obras de protección y mitigación del riesgo por inundación en la cuenca baja del río Bogotá — municipios de Sibaté y Soacha',                  presupuesto: 15500000000, cierre: new Date(Date.now() + 40   * 86400000).toISOString(), docs: 17 },
+  { id: 1,  entidad: 'Alcaldía de Bogotá',          idProceso: 'SECOP-2026-INF-089',   departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Infraestructura vial',  sector: 'Infrastructure',  objeto: 'Construcción y rehabilitación de malla vial local en las localidades de Kennedy, Bosa y Ciudad Bolívar — Grupo 3',                         presupuesto: 1200000000,  cierre: new Date(Date.now() + 1.5  * 86400000).toISOString(), docs: 12 },
+  { id: 2,  entidad: 'INVIAS',                       idProceso: 'INVIAS-LP-2026-117',    departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Infraestructura vial',  sector: 'Infrastructure',  objeto: 'Rehabilitación de la carretera Bogotá–Villeta, sector La Vega–Villeta, corredor nacional Ruta 50',                                            presupuesto: 5200000000,  cierre: new Date(Date.now() + 22   * 86400000).toISOString(), docs: 10 },
+  { id: 3,  entidad: 'Gobernación de Boyacá',        idProceso: 'BOY-LP-2026-042',       departamento: 'BOYACÁ',            unspsc: '72120000', unspscLabel: 'Edificación',     tipo: 'Construcciones',        sector: 'Infrastructure',  objeto: 'Construcción de 12 sedes educativas rurales en municipios no certificados del departamento de Boyacá — Fase II',                                   presupuesto: 3800000000,  cierre: new Date(Date.now() + 30   * 86400000).toISOString(), docs: 15 },
+  { id: 4,  entidad: 'Alcaldía de Villavicencio',    idProceso: 'VCIO-LP-2026-018',      departamento: 'META',              unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Infraestructura vial',  sector: 'Infrastructure',  objeto: 'Mejoramiento y pavimentación de vías terciarias en los corregimientos de Apiay, Pompeya y La Concepción',                                           presupuesto: 2100000000,  cierre: new Date(Date.now() + 14   * 86400000).toISOString(), docs: 8 },
+  { id: 5,  entidad: 'Gobernación de Cundinamarca',  idProceso: 'CUN-LP-2026-076',       departamento: 'CUNDINAMARCA',      unspsc: '72120000', unspscLabel: 'Edificación',     tipo: 'Construcciones',        sector: 'Infrastructure',  objeto: 'Construcción del nuevo hospital regional de segundo nivel en Fusagasugá — incluye dotación biomédica',                                          presupuesto: 8400000000,  cierre: new Date(Date.now() + 5    * 86400000).toISOString(), docs: 18 },
+  { id: 6,  entidad: 'Gobernación del Valle',        idProceso: 'GVAL-CIV-2026-091',     departamento: 'VALLE DEL CAUCA',   unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Construcciones',        sector: 'Infrastructure',  objeto: 'Construcción de centros de desarrollo infantil en tres municipios no certificados del departamento del Valle del Cauca',                         presupuesto: 4500000000,  cierre: new Date(Date.now() + 18   * 86400000).toISOString(), docs: 14 },
+  { id: 7,  entidad: 'Ministerio de Vivienda',       idProceso: 'MINV-AGU-2026-112',     departamento: 'CHOCÓ',             unspsc: '72120000', unspscLabel: 'Edificación',     tipo: 'Adecuaciones',          sector: 'Infrastructure',  objeto: 'Suministro e instalación de sistemas de potabilización para comunidades rurales en el departamento de Chocó',                                     presupuesto: 850000000,   cierre: new Date(Date.now() + 28   * 86400000).toISOString(), docs: 9 },
+  { id: 8,  entidad: 'Metro de Medellín',            idProceso: 'MET-2026-TR-004',       departamento: 'ANTIOQUIA',         unspsc: '81100000', unspscLabel: 'Consultoría',     tipo: 'Infraestructura vial',  sector: 'Tech Services',    objeto: 'Consultoría para la expansión de la línea A del sistema masivo de transporte — estudios de prefactibilidad y diseños de detalle',               presupuesto: 3400000000,  cierre: new Date(Date.now() + 45   * 86400000).toISOString(), docs: 11 },
+  { id: 9,  entidad: 'MinTIC',                       idProceso: 'CTIC-2026-DIG-031',     departamento: 'BOGOTÁ D.C.',       unspsc: '81100000', unspscLabel: 'Consultoría',     tipo: 'Adecuaciones',          sector: 'Tech Services',    objeto: 'Implementación de infraestructura de conectividad digital en zonas rurales y municipios PDET — fase III',                                        presupuesto: 1900000000,  cierre: new Date(Date.now() + 35   * 86400000).toISOString(), docs: 7 },
+  { id: 10, entidad: 'INVIAS',                       idProceso: 'INVIAS-MET-2026-088',   departamento: 'META',              unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Infraestructura vial',  sector: 'Infrastructure',  objeto: 'Construcción de la segunda calzada Villavicencio–Puerto López, tramo 3 — obras de drenaje y estabilización de taludes',                         presupuesto: 12000000000, cierre: new Date(Date.now() + 25   * 86400000).toISOString(), docs: 16 },
+  { id: 11, entidad: 'Gobernación del Meta',         idProceso: 'META-LP-2026-055',      departamento: 'META',              unspsc: '72120000', unspscLabel: 'Edificación',     tipo: 'Construcciones',        sector: 'Infrastructure',  objeto: 'Construcción de vivienda de interés prioritario en los municipios de Granada, San Martín y Puerto Gaitán — 340 unidades',                      presupuesto: 6200000000,  cierre: new Date(Date.now() + 20   * 86400000).toISOString(), docs: 13 },
+  { id: 12, entidad: 'Alcaldía de Tunja',            idProceso: 'TUN-LP-2026-029',       departamento: 'BOYACÁ',            unspsc: '72150000', unspscLabel: 'Mantenimiento',   tipo: 'Adecuaciones',          sector: 'Infrastructure',  objeto: 'Mantenimiento correctivo y preventivo de la red vial urbana del municipio de Tunja — incluye señalización horizontal y vertical',              presupuesto: 400000000,   cierre: new Date(Date.now() + 10   * 86400000).toISOString(), docs: 6 },
+  { id: 13, entidad: 'IDU Bogotá',                   idProceso: 'IDU-LP-2026-141',       departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Infraestructura vial',  sector: 'Infrastructure',  objeto: 'Construcción del intercambiador vial Avenida Boyacá con Calle 13 — puentes vehiculares y deprimidos — lote 2',                                presupuesto: 9800000000,  cierre: new Date(Date.now() + 35   * 86400000).toISOString(), docs: 20 },
+  { id: 14, entidad: 'Fondo Adaptación',             idProceso: 'FAD-LP-2026-063',       departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Adecuaciones',          sector: 'Infrastructure',  objeto: 'Obras de protección y mitigación del riesgo por inundación en la cuenca baja del río Bogotá — municipios de Sibaté y Soacha',                  presupuesto: 15500000000, cierre: new Date(Date.now() + 40   * 86400000).toISOString(), docs: 17 },
 ]
 
 const CLIENTE_DEMO = {
@@ -968,6 +969,8 @@ export default function Dashboard() {
     r.setProperty('--t-card2',   p.cardHover)
   }, [theme])
   const [filtro, setFiltro] = useState('Todos')
+  const [filtroDepto, setFiltroDepto] = useState('Todos')
+  const [filtroTipo, setFiltroTipo] = useState('Todos')
   const [busq, setBusq] = useState('')
   const [activeId, setActiveId] = useState<number | null>(1)
 
@@ -976,12 +979,16 @@ export default function Dashboard() {
   const presupuestoTotal = PROCESOS_COMPATIBLES.reduce((a, p) => a + p.presupuesto, 0)
   const cBudget = useCounter(Math.round(presupuestoTotal / 1_000_000_000))
 
+  const deptosUnicos = ['Todos', ...Array.from(new Set(PROCESOS.map(p => p.departamento))).sort()]
+  const tiposUnicos = ['Todos', 'Infraestructura vial', 'Adecuaciones', 'Construcciones']
   const filtros = ['Todos', 'Alta compat.', 'Media compat.', 'Cierre urgente']
 
   const procesados = PROCESOS_COMPATIBLES.filter(p => {
     if (filtro === 'Alta compat.' && (p.score || 0) < 70) return false
     if (filtro === 'Media compat.' && ((p.score || 0) < 40 || (p.score || 0) >= 70)) return false
     if (filtro === 'Cierre urgente' && new Date(p.cierre).getTime() - Date.now() >= 86400000) return false
+    if (filtroDepto !== 'Todos' && p.departamento !== filtroDepto) return false
+    if (filtroTipo !== 'Todos' && p.tipo !== filtroTipo) return false
     if (busq && !p.entidad.toLowerCase().includes(busq.toLowerCase()) && !p.objeto.toLowerCase().includes(busq.toLowerCase())) return false
     return true
   })
@@ -1143,12 +1150,35 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* ─ Filtros + search ─ */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>Oportunidades activas</div>
-              <div style={{ fontSize: 12, color: C.textSec }}>{procesados.length} procesos compatibles</div>
+          {/* ─ Filtros ─ */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Row 1: Departamento + Tipo */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>Oportunidades activas</div>
+                <div style={{ fontSize: 12, color: C.textSec }}>{procesados.length} procesos compatibles</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)} style={{
+                  background: C.card, border: `1px solid ${filtroDepto !== 'Todos' ? C.orange : C.border}`,
+                  borderRadius: 6, padding: '7px 12px', color: filtroDepto !== 'Todos' ? C.orange : C.textSec,
+                  fontSize: 12, outline: 'none', cursor: 'pointer', fontWeight: 500, maxWidth: 180,
+                }}>
+                  {deptosUnicos.map(d => <option key={d} value={d}>{d === 'Todos' ? '🏛 Todos los deptos.' : d}</option>)}
+                </select>
+                {tiposUnicos.map(t => (
+                  <button key={t} onClick={() => setFiltroTipo(t)} style={{
+                    padding: '6px 14px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                    background: filtroTipo === t ? C.orange : 'transparent',
+                    border: `1px solid ${filtroTipo === t ? C.orange : C.border}`,
+                    color: filtroTipo === t ? '#fff' : C.textSec,
+                    transition: 'all 160ms', whiteSpace: 'nowrap',
+                  }}>{t === 'Todos' ? '🏗 Todos los tipos' : t}</button>
+                ))}
+              </div>
             </div>
+
+            {/* Row 2: Score filters + search */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               {filtros.map(f => (
                 <button key={f} onClick={() => setFiltro(f)} style={{
@@ -1159,10 +1189,10 @@ export default function Dashboard() {
                   transition: 'all 160ms',
                 }}>{f}</button>
               ))}
-              <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Search..."
+              <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Buscar entidad u objeto..."
                 style={{
                   background: C.card, border: `1px solid ${C.border}`, borderRadius: 6,
-                  padding: '6px 14px', color: C.text, fontSize: 13, outline: 'none', width: 160,
+                  padding: '6px 14px', color: C.text, fontSize: 13, outline: 'none', width: 200, marginLeft: 'auto',
                 }} />
             </div>
           </div>
