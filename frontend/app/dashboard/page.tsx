@@ -355,7 +355,7 @@ function MisPropuestasDropdown() {
         <div style={{
           position: 'absolute', top: 'calc(100% + 8px)', right: 0,
           width: 320, background: C.card, border: `1px solid ${C.border}`,
-          borderRadius: 8, zIndex: 100,
+          borderRadius: 8, zIndex: 200,
           boxShadow: '0 16px 40px rgba(0,0,0,.6)',
           animation: 'row-enter .18s ease both',
         }}>
@@ -1089,7 +1089,7 @@ export default function Dashboard() {
       </header>
 
       {/* ── BODY ── */}
-      <div style={{ height: 'calc(100vh - 56px)', display: 'flex', position: 'relative', zIndex: 1, overflow: 'hidden' }}>
+      <div style={{ height: 'calc(100vh - 56px)', display: 'flex', position: 'relative', zIndex: 1 }}>
 
         {/* ── COLUMNA IZQUIERDA — ocupa lo que deja el panel ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '28px 28px 28px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
