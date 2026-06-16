@@ -316,6 +316,20 @@ function MisPropuestasDropdown() {
   const C = useTheme()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [pos, setPos] = useState({ top: 0, right: 0 })
+
+  const updatePos = useCallback(() => {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 8, right: window.innerWidth - r.right })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (open) { updatePos(); window.addEventListener('scroll', updatePos, true); window.addEventListener('resize', updatePos) }
+    return () => { window.removeEventListener('scroll', updatePos, true); window.removeEventListener('resize', updatePos) }
+  }, [open, updatePos])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -328,6 +342,7 @@ function MisPropuestasDropdown() {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
+        ref={btnRef}
         onClick={() => setOpen(o => !o)}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
@@ -353,9 +368,9 @@ function MisPropuestasDropdown() {
 
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+          position: 'fixed', top: pos.top, right: pos.right,
           width: 320, background: C.card, border: `1px solid ${C.border}`,
-          borderRadius: 8, zIndex: 200,
+          borderRadius: 8, zIndex: 9999,
           boxShadow: '0 16px 40px rgba(0,0,0,.6)',
           animation: 'row-enter .18s ease both',
         }}>
@@ -1075,7 +1090,7 @@ export default function Dashboard() {
       </header>
 
       {/* ── BODY ── */}
-      <div style={{ height: 'calc(100vh - 56px)', display: 'flex', position: 'relative', zIndex: 1 }}>
+      <div style={{ height: 'calc(100vh - 56px)', display: 'flex', position: 'relative', zIndex: 1, overflow: 'hidden' }}>
 
         {/* ── COLUMNA IZQUIERDA — ocupa lo que deja el panel ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '28px 28px 28px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
