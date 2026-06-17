@@ -16,6 +16,7 @@ from models import AnalisisProceso, Cliente, Documento, LogEjecucion, Proceso, P
 from preseleccion import analizar_preseleccion
 from notificaciones import enviar_alerta_nuevos_procesos
 from radar import consultar_contratos_similares, correr_radar
+from analizador_pliego import analizar_pliego
 from calculadoras import (
     calcular_capacidad_financiera,
     calcular_capacidad_residual,
@@ -410,14 +411,32 @@ class AnalisisOut(BaseModel):
     proceso_id: int
     cliente_id: int
     score_preseleccion: int
+    score_pliego: int
     recomendacion: str
     faltantes: list[str]
     riesgos: list[str]
     detalle: dict
+    analisis_pliego: dict
     fecha_analisis: str
 
     class Config:
         from_attributes = True
+
+
+def _analisis_to_out(analisis: AnalisisProceso) -> AnalisisOut:
+    return AnalisisOut(
+        id=analisis.id,
+        proceso_id=analisis.proceso_id,
+        cliente_id=analisis.cliente_id,
+        score_preseleccion=analisis.score_preseleccion,
+        score_pliego=analisis.score_pliego,
+        recomendacion=analisis.recomendacion,
+        faltantes=json.loads(analisis.faltantes),
+        riesgos=json.loads(analisis.riesgos),
+        detalle=json.loads(analisis.detalle),
+        analisis_pliego=json.loads(analisis.analisis_pliego),
+        fecha_analisis=analisis.fecha_analisis.isoformat(),
+    )
 
 
 @app.post("/procesos/{proceso_id}/preseleccion/{cliente_id}", response_model=AnalisisOut)
@@ -430,17 +449,7 @@ def preseleccionar_proceso(proceso_id: int, cliente_id: int, db: Session = Depen
         logger.exception("Error en pre-selección: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return AnalisisOut(
-        id=analisis.id,
-        proceso_id=analisis.proceso_id,
-        cliente_id=analisis.cliente_id,
-        score_preseleccion=analisis.score_preseleccion,
-        recomendacion=analisis.recomendacion,
-        faltantes=json.loads(analisis.faltantes),
-        riesgos=json.loads(analisis.riesgos),
-        detalle=json.loads(analisis.detalle),
-        fecha_analisis=analisis.fecha_analisis.isoformat(),
-    )
+    return _analisis_to_out(analisis)
 
 
 @app.get("/procesos/{proceso_id}/preseleccion/{cliente_id}", response_model=AnalisisOut)
@@ -453,16 +462,61 @@ def obtener_preseleccion(proceso_id: int, cliente_id: int, db: Session = Depends
     if not analisis:
         raise HTTPException(status_code=404, detail="No hay análisis previo. Ejecute POST primero.")
 
-    return AnalisisOut(
-        id=analisis.id,
-        proceso_id=analisis.proceso_id,
-        cliente_id=analisis.cliente_id,
-        score_preseleccion=analisis.score_preseleccion,
-        recomendacion=analisis.recomendacion,
-        faltantes=json.loads(analisis.faltantes),
-        riesgos=json.loads(analisis.riesgos),
-        detalle=json.loads(analisis.detalle),
-        fecha_analisis=analisis.fecha_analisis.isoformat(),
+    return _analisis_to_out(analisis)
+
+
+# ---------- Análisis de pliego ----------
+
+
+class PliegoOut(BaseModel):
+    proceso_id: int
+    cliente_id: int
+    analisis_id: int
+    documento_pliego: str | None
+    cantidad_requisitos: int
+    cantidad_cumplidos: int
+    score_pliego: int
+    requisitos: list[dict]
+    cumplimiento: list[dict]
+    error: str | None = None
+
+
+@app.post("/procesos/{proceso_id}/pliego/{cliente_id}", response_model=PliegoOut)
+def analizar_pliego_endpoint(proceso_id: int, cliente_id: int, db: Session = Depends(get_db)):
+    try:
+        resultado = analizar_pliego(proceso_id, cliente_id, db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Error analizando pliego: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return PliegoOut(**resultado)
+
+
+@app.get("/procesos/{proceso_id}/pliego/{cliente_id}", response_model=PliegoOut)
+def obtener_pliego_endpoint(proceso_id: int, cliente_id: int, db: Session = Depends(get_db)):
+    analisis = (
+        db.query(AnalisisProceso)
+        .filter(AnalisisProceso.proceso_id == proceso_id, AnalisisProceso.cliente_id == cliente_id)
+        .first()
+    )
+    if not analisis or not analisis.analisis_pliego:
+        raise HTTPException(status_code=404, detail="No hay análisis de pliego previo. Ejecute POST primero.")
+
+    pliego = json.loads(analisis.analisis_pliego)
+    detalle = json.loads(analisis.detalle)
+    pliego_meta = detalle.get("pliego", {})
+
+    return PliegoOut(
+        proceso_id=proceso_id,
+        cliente_id=cliente_id,
+        analisis_id=analisis.id,
+        documento_pliego=pliego_meta.get("documento_pliego_nombre"),
+        cantidad_requisitos=pliego_meta.get("cantidad_requisitos", 0),
+        cantidad_cumplidos=pliego_meta.get("cantidad_cumplidos", 0),
+        score_pliego=analisis.score_pliego,
+        requisitos=pliego_meta.get("requisitos", []),
+        cumplimiento=pliego.get("cumplimiento", []),
     )
 
 

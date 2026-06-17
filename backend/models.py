@@ -100,10 +100,12 @@ class AnalisisProceso(Base):
     proceso_id = Column(Integer, ForeignKey("procesos.id"), nullable=False)
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
     score_preseleccion = Column(Integer, nullable=False, default=0)
+    score_pliego = Column(Integer, nullable=False, default=0)
     recomendacion = Column(String, nullable=False, default="pendiente")
     faltantes = Column(Text, nullable=False, default="[]")
     riesgos = Column(Text, nullable=False, default="[]")
     detalle = Column(Text, nullable=False, default="{}")
+    analisis_pliego = Column(Text, nullable=False, default="{}")
     fecha_analisis = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     proceso = relationship("Proceso", backref="analisis")

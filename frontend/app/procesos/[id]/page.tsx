@@ -259,20 +259,37 @@ export default function ProcesosCliente() {
                       ) : '—'}
                     </td>
                     <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                      <Link
-                        href={`/preseleccion?cliente_id=${clienteId}&proceso_id=${p.id}`}
-                        style={{
-                          background: 'var(--orange)',
-                          color: '#fff',
-                          fontSize: 12,
-                          padding: '4px 10px',
-                          borderRadius: 3,
-                          textDecoration: 'none',
-                          fontWeight: 600,
-                        }}
-                      >
-                        Pre-seleccionar
-                      </Link>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                        <Link
+                          href={`/preseleccion?cliente_id=${clienteId}&proceso_id=${p.id}`}
+                          style={{
+                            background: 'var(--orange)',
+                            color: '#fff',
+                            fontSize: 12,
+                            padding: '4px 10px',
+                            borderRadius: 3,
+                            textDecoration: 'none',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Pre-seleccionar
+                        </Link>
+                        <Link
+                          href={`/pliego?cliente_id=${clienteId}&proceso_id=${p.id}`}
+                          style={{
+                            background: 'var(--surface)',
+                            color: 'var(--text)',
+                            fontSize: 12,
+                            padding: '4px 10px',
+                            borderRadius: 3,
+                            textDecoration: 'none',
+                            fontWeight: 600,
+                            border: '1px solid var(--border)',
+                          }}
+                        >
+                          Pliego
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
