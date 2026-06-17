@@ -21,16 +21,19 @@ backend/.env
 frontend/.env.local
 
 # Logs
-logs/*.log
+logs/
 
 # Storage
-storage/pliegos/
+storage/
 
 # Node
 frontend/node_modules/
 frontend-tmp/
 frontend/.next/
 frontend/out/
+*.tsbuildinfo
+frontend/test-*.js
+frontend/test-*.ts
 
 # OS
 .DS_Store

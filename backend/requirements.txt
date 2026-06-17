@@ -6,3 +6,8 @@ requests
 resend
 python-dotenv
 httpx
+python-multipart
+pdfplumber
+python-docx
+openpyxl
+pandas

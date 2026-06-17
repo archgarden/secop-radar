@@ -1,6 +1,107 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import Link from 'next/link'
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+/* ─── Tipos del backend ───────────────────── */
+interface ClienteApi {
+  id: number
+  nombre: string
+  email: string
+  departamentos: string
+  unspsc_codes: string
+  presupuesto_min: number
+  presupuesto_max: number
+  activo: boolean
+}
+
+interface ProcesoApi {
+  id: number
+  numero_proceso: string
+  entidad: string
+  objeto: string
+  presupuesto: number
+  departamento: string | null
+  unspsc_code: string | null
+  url_documento: string | null
+  tiene_adenda: boolean
+  score_match: number
+  fecha_cierre?: string | null
+  fecha_publicacion?: string | null
+}
+
+interface ContratoApi {
+  nombre_entidad: string
+  proveedor_adjudicado: string
+  valor_del_contrato: string | number
+  codigo_de_categoria_principal: string
+  descripcion_del_proceso: string
+  modalidad_de_contratacion: string
+  estado_contrato: string
+  fecha_de_firma: string
+  departamento: string
+  urlproceso: string
+}
+
+function parseCliente(c: ClienteApi) {
+  let deps: string[] = []
+  let unspsc: string[] = []
+  try { deps = JSON.parse(c.departamentos || '[]') } catch {}
+  try { unspsc = JSON.parse(c.unspsc_codes || '[]') } catch {}
+  return { ...c, departamentos: deps, unspsc_codes: unspsc }
+}
+
+function labelUNSPSC(prefix: string) {
+  if (prefix.startsWith('7214')) return 'Infraestructura pública'
+  if (prefix.startsWith('7212')) return 'Edificación'
+  if (prefix.startsWith('7215')) return 'Mantenimiento'
+  if (prefix.startsWith('8110')) return 'Consultoría'
+  return 'Otro'
+}
+
+function tipoProceso(prefix: string) {
+  if (prefix.startsWith('7214')) return 'Infraestructura vial'
+  if (prefix.startsWith('7212')) return 'Construcciones'
+  if (prefix.startsWith('7215')) return 'Adecuaciones'
+  if (prefix.startsWith('8110')) return 'Consultoría'
+  return 'Otros'
+}
+
+function mapearProceso(p: ProcesoApi, cliente: ReturnType<typeof parseCliente>): ProcesoData {
+  const unspscPrefix = p.unspsc_code ? p.unspsc_code.replace('V1.', '').slice(0, 4) : ''
+  const cierre = p.fecha_cierre
+    ? new Date(p.fecha_cierre).toISOString()
+    : new Date(Date.now() + 30 * 86400000).toISOString()
+  const matchDepto = cliente.departamentos.some(d =>
+    (p.departamento || '').toUpperCase().includes(d.toUpperCase())
+  )
+  const matchUNSPSC = cliente.unspsc_codes.some(u => unspscPrefix.startsWith(u.slice(0, 4)))
+  const matchPresupuesto = p.presupuesto >= cliente.presupuesto_min && p.presupuesto <= cliente.presupuesto_max
+  const diasRestantes = (new Date(cierre).getTime() - Date.now()) / 86400000
+  const matchVigencia = diasRestantes > 15
+  const score = p.score_match || 0
+  return {
+    id: p.id,
+    entidad: p.entidad,
+    idProceso: p.numero_proceso,
+    departamento: p.departamento || '—',
+    unspsc: unspscPrefix,
+    unspscLabel: labelUNSPSC(unspscPrefix),
+    tipo: tipoProceso(unspscPrefix),
+    sector: 'Infrastructure',
+    objeto: p.objeto,
+    presupuesto: p.presupuesto,
+    cierre,
+    docs: 0,
+    score,
+    matchDepto,
+    matchUNSPSC,
+    matchPresupuesto,
+    matchVigencia,
+  }
+}
 
 /* ─── Paleta ─────────────────────────────── */
 const DARK = {
@@ -42,53 +143,7 @@ interface ProcesoData {
   matchVigencia?: boolean
 }
 
-const PROCESOS: ProcesoData[] = [
-  { id: 1,  entidad: 'Alcaldía de Bogotá',          idProceso: 'SECOP-2026-INF-089',   departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Infraestructura vial',  sector: 'Infrastructure',  objeto: 'Construcción y rehabilitación de malla vial local en las localidades de Kennedy, Bosa y Ciudad Bolívar — Grupo 3',                         presupuesto: 1200000000,  cierre: new Date(Date.now() + 1.5  * 86400000).toISOString(), docs: 12 },
-  { id: 2,  entidad: 'INVIAS',                       idProceso: 'INVIAS-LP-2026-117',    departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Infraestructura vial',  sector: 'Infrastructure',  objeto: 'Rehabilitación de la carretera Bogotá–Villeta, sector La Vega–Villeta, corredor nacional Ruta 50',                                            presupuesto: 5200000000,  cierre: new Date(Date.now() + 22   * 86400000).toISOString(), docs: 10 },
-  { id: 3,  entidad: 'Gobernación de Boyacá',        idProceso: 'BOY-LP-2026-042',       departamento: 'BOYACÁ',            unspsc: '72120000', unspscLabel: 'Edificación',     tipo: 'Construcciones',        sector: 'Infrastructure',  objeto: 'Construcción de 12 sedes educativas rurales en municipios no certificados del departamento de Boyacá — Fase II',                                   presupuesto: 3800000000,  cierre: new Date(Date.now() + 30   * 86400000).toISOString(), docs: 15 },
-  { id: 4,  entidad: 'Alcaldía de Villavicencio',    idProceso: 'VCIO-LP-2026-018',      departamento: 'META',              unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Infraestructura vial',  sector: 'Infrastructure',  objeto: 'Mejoramiento y pavimentación de vías terciarias en los corregimientos de Apiay, Pompeya y La Concepción',                                           presupuesto: 2100000000,  cierre: new Date(Date.now() + 14   * 86400000).toISOString(), docs: 8 },
-  { id: 5,  entidad: 'Gobernación de Cundinamarca',  idProceso: 'CUN-LP-2026-076',       departamento: 'CUNDINAMARCA',      unspsc: '72120000', unspscLabel: 'Edificación',     tipo: 'Construcciones',        sector: 'Infrastructure',  objeto: 'Construcción del nuevo hospital regional de segundo nivel en Fusagasugá — incluye dotación biomédica',                                          presupuesto: 8400000000,  cierre: new Date(Date.now() + 5    * 86400000).toISOString(), docs: 18 },
-  { id: 6,  entidad: 'Gobernación del Valle',        idProceso: 'GVAL-CIV-2026-091',     departamento: 'VALLE DEL CAUCA',   unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Construcciones',        sector: 'Infrastructure',  objeto: 'Construcción de centros de desarrollo infantil en tres municipios no certificados del departamento del Valle del Cauca',                         presupuesto: 4500000000,  cierre: new Date(Date.now() + 18   * 86400000).toISOString(), docs: 14 },
-  { id: 7,  entidad: 'Ministerio de Vivienda',       idProceso: 'MINV-AGU-2026-112',     departamento: 'CHOCÓ',             unspsc: '72120000', unspscLabel: 'Edificación',     tipo: 'Adecuaciones',          sector: 'Infrastructure',  objeto: 'Suministro e instalación de sistemas de potabilización para comunidades rurales en el departamento de Chocó',                                     presupuesto: 850000000,   cierre: new Date(Date.now() + 28   * 86400000).toISOString(), docs: 9 },
-  { id: 8,  entidad: 'Metro de Medellín',            idProceso: 'MET-2026-TR-004',       departamento: 'ANTIOQUIA',         unspsc: '81100000', unspscLabel: 'Consultoría',     tipo: 'Infraestructura vial',  sector: 'Tech Services',    objeto: 'Consultoría para la expansión de la línea A del sistema masivo de transporte — estudios de prefactibilidad y diseños de detalle',               presupuesto: 3400000000,  cierre: new Date(Date.now() + 45   * 86400000).toISOString(), docs: 11 },
-  { id: 9,  entidad: 'MinTIC',                       idProceso: 'CTIC-2026-DIG-031',     departamento: 'BOGOTÁ D.C.',       unspsc: '81100000', unspscLabel: 'Consultoría',     tipo: 'Adecuaciones',          sector: 'Tech Services',    objeto: 'Implementación de infraestructura de conectividad digital en zonas rurales y municipios PDET — fase III',                                        presupuesto: 1900000000,  cierre: new Date(Date.now() + 35   * 86400000).toISOString(), docs: 7 },
-  { id: 10, entidad: 'INVIAS',                       idProceso: 'INVIAS-MET-2026-088',   departamento: 'META',              unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Infraestructura vial',  sector: 'Infrastructure',  objeto: 'Construcción de la segunda calzada Villavicencio–Puerto López, tramo 3 — obras de drenaje y estabilización de taludes',                         presupuesto: 12000000000, cierre: new Date(Date.now() + 25   * 86400000).toISOString(), docs: 16 },
-  { id: 11, entidad: 'Gobernación del Meta',         idProceso: 'META-LP-2026-055',      departamento: 'META',              unspsc: '72120000', unspscLabel: 'Edificación',     tipo: 'Construcciones',        sector: 'Infrastructure',  objeto: 'Construcción de vivienda de interés prioritario en los municipios de Granada, San Martín y Puerto Gaitán — 340 unidades',                      presupuesto: 6200000000,  cierre: new Date(Date.now() + 20   * 86400000).toISOString(), docs: 13 },
-  { id: 12, entidad: 'Alcaldía de Tunja',            idProceso: 'TUN-LP-2026-029',       departamento: 'BOYACÁ',            unspsc: '72150000', unspscLabel: 'Mantenimiento',   tipo: 'Adecuaciones',          sector: 'Infrastructure',  objeto: 'Mantenimiento correctivo y preventivo de la red vial urbana del municipio de Tunja — incluye señalización horizontal y vertical',              presupuesto: 400000000,   cierre: new Date(Date.now() + 10   * 86400000).toISOString(), docs: 6 },
-  { id: 13, entidad: 'IDU Bogotá',                   idProceso: 'IDU-LP-2026-141',       departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Infraestructura vial',  sector: 'Infrastructure',  objeto: 'Construcción del intercambiador vial Avenida Boyacá con Calle 13 — puentes vehiculares y deprimidos — lote 2',                                presupuesto: 9800000000,  cierre: new Date(Date.now() + 35   * 86400000).toISOString(), docs: 20 },
-  { id: 14, entidad: 'Fondo Adaptación',             idProceso: 'FAD-LP-2026-063',       departamento: 'CUNDINAMARCA',      unspsc: '72140000', unspscLabel: 'Obra civil',      tipo: 'Adecuaciones',          sector: 'Infrastructure',  objeto: 'Obras de protección y mitigación del riesgo por inundación en la cuenca baja del río Bogotá — municipios de Sibaté y Soacha',                  presupuesto: 15500000000, cierre: new Date(Date.now() + 40   * 86400000).toISOString(), docs: 17 },
-]
-
-const CLIENTE_DEMO = {
-  nombre: 'Constructora Andes SAS',
-  nit: '901.234.567-8',
-  email: 'licitaciones@constructorandes.com',
-  departamentos: ['CUNDINAMARCA', 'BOYACÁ', 'META'],
-  unspsc_codes: ['72140000', '72120000'],
-  unspsc_labels: ['Infraestructura pública', 'Edificación'],
-  presupuesto_min: 500000000,
-  presupuesto_max: 15000000000,
-}
-
-function calcularCompatibilidad(p: ProcesoData): ProcesoData {
-  const c = CLIENTE_DEMO
-  const matchDepto = c.departamentos.some(d => p.departamento.toUpperCase().includes(d.toUpperCase()))
-  const matchUNSPSC = c.unspsc_codes.some(u => p.unspsc.startsWith(u.slice(0, 4)))
-  const matchPresupuesto = p.presupuesto >= c.presupuesto_min && p.presupuesto <= c.presupuesto_max
-  const diasRestantes = (new Date(p.cierre).getTime() - Date.now()) / 86400000
-  const matchVigencia = diasRestantes > 15
-
-  let score = 0
-  if (matchDepto) score += 30
-  if (matchUNSPSC) score += 30
-  if (matchPresupuesto) score += 25
-  if (matchVigencia) score += 15
-
-  return { ...p, score, matchDepto, matchUNSPSC, matchPresupuesto, matchVigencia }
-}
-
-// Procesos evaluados contra el cliente demo
-const PROCESOS_COMPATIBLES = PROCESOS.map(calcularCompatibilidad).sort((a, b) => (b.score || 0) - (a.score || 0))
+// Datos reales se cargan desde el backend en el componente Dashboard
 
 type DocStatus = 'listo' | 'en_tramite' | 'pendiente'
 const DOCS_SECOP: { nombre: string; estado: string; status: DocStatus }[] = [
@@ -112,17 +167,6 @@ const ETAPAS_SECOP = [
   { label: 'Traslado del informe',            done: false,   fecha: 'estimado: +14 días' },
   { label: 'Audiencia de adjudicación',       done: false,   fecha: 'estimado: +18 días' },
   { label: 'Adjudicación del contrato',       done: false,   fecha: 'estimado: +20 días' },
-]
-
-const CONTRATOS_SIMILARES = [
-  { entidad: 'INVIAS',                    proveedor: 'CONSORCIO VIAL BOGOTÁ 2025',       valor: 11800000000,  modalidad: 'Licitación pública',      fecha: '2025-11-14' },
-  { entidad: 'IDU Bogotá',                proveedor: 'UNIÓN TEMPORAL MALLA VIAL SUR',     valor: 8900000000,   modalidad: 'Licitación pública',      fecha: '2025-09-02' },
-  { entidad: 'Gobernación de Cundinamarca',proveedor:'CONSORCIO INFRAESTRUCTURA CUN 2024',valor: 6400000000,   modalidad: 'Licitación pública',      fecha: '2025-06-20' },
-  { entidad: 'Alcaldía de Bogotá',        proveedor: 'PAVIMENTAR S.A.S.',                 valor: 2300000000,   modalidad: 'Selección abreviada',     fecha: '2025-04-10' },
-  { entidad: 'INVIAS',                    proveedor: 'CONSTRUCTORA ANDINA LTDA',          valor: 15000000000,  modalidad: 'Licitación pública',      fecha: '2025-02-28' },
-  { entidad: 'Gobernación de Boyacá',     proveedor: 'CONSORCIO OBRAS BOYACÁ',            valor: 4200000000,   modalidad: 'Licitación pública',      fecha: '2024-12-15' },
-  { entidad: 'IDU Bogotá',                proveedor: 'UNIÓN TEMPORAL PUENTES BOGOTÁ',     valor: 7200000000,   modalidad: 'Licitación pública',      fecha: '2024-10-01' },
-  { entidad: 'Alcaldía de Villavicencio', proveedor: 'VÍAS Y PAVIMENTOS LLANO S.A.S.',   valor: 1900000000,   modalidad: 'Selección abreviada',     fecha: '2024-08-18' },
 ]
 
 /* ─── Utils ───────────────────────────────── */
@@ -597,7 +641,7 @@ function ProcesoCard({ p, onClick, active }: { p: ProcesoData; onClick: () => vo
 }
 
 /* ─── Panel Seguimiento de Propuesta ─────── */
-function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
+function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData | null; cliente: ClienteApi | null; contratos: ContratoApi[] }) {
   const C = useTheme()
   const [docStatuses, setDocStatuses] = useState<DocStatus[]>(DOCS_SECOP.map(d => d.status))
   const [tab, setTab] = useState<'docs' | 'aiu' | 'contratos' | 'etapas'>('docs')
@@ -642,6 +686,15 @@ function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
   const fallbackDate = '2099-12-31T23:59:59.000Z'
   const [countdownTxt, countdownUrgent] = useCountdown(proceso?.cierre || fallbackDate)
 
+  // ── Modalidad recomendada ──
+  const [modalidad, setModalidad] = useState<{ modalidad: string; descripcion: string; smmlv: number } | null>(null)
+  useEffect(() => {
+    if (!proceso) return
+    fetch(`${API}/modalidad/recomendada/${proceso.presupuesto}`)
+      .then(r => r.json())
+      .then(setModalidad)
+  }, [proceso])
+
   if (!proceso) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14 }}>
       <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke={C.textSec} strokeWidth="1.3">
@@ -674,6 +727,7 @@ function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
           border: `1px solid ${countdownUrgent ? 'rgba(239,68,68,.4)' : C.border}`,
           borderRadius: 6, padding: '10px 14px',
           display: 'flex', alignItems: 'center', gap: 10,
+          marginBottom: 12,
         }}>
           <span style={{ fontSize: 20 }}>{countdownUrgent ? '⚠' : '⏱'}</span>
           <div style={{ flex: 1 }}>
@@ -689,6 +743,26 @@ function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
             </div>
           </div>
         </div>
+
+        {/* Modalidad recomendada */}
+        {modalidad && (
+          <div style={{
+            background: 'rgba(59,130,246,.08)',
+            border: '1px solid rgba(59,130,246,.25)',
+            borderRadius: 6,
+            padding: '10px 14px',
+          }}>
+            <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
+              Modalidad recomendada
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#3b82f6', marginBottom: 3 }}>
+              {modalidad.modalidad}
+            </div>
+            <div style={{ fontSize: 10, color: C.textSec, lineHeight: 1.4 }}>
+              {modalidad.descripcion}
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ height: 1, background: C.border, margin: '14px 0' }} />
@@ -913,29 +987,29 @@ function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
       {tab === 'contratos' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 2 }}>
-            Histórico de adjudicaciones — {CLIENTE_DEMO.unspsc_labels[0]} / {CLIENTE_DEMO.unspsc_labels[1]}
+            Histórico de adjudicaciones — {cliente ? labelUNSPSC(parseCliente(cliente).unspsc_codes[0] || '') : ''} / {cliente ? labelUNSPSC(parseCliente(cliente).unspsc_codes[1] || '') : ''}
           </div>
           <div style={{ fontSize: 9, color: C.textSec, marginBottom: 8 }}>
             Contratos recientes en los mismos códigos UNSPSC y departamentos del cliente. Fuente: SECOP II — datos abiertos.
           </div>
 
-          {CONTRATOS_SIMILARES.map((c, i) => (
+          {contratos.map((c, i) => (
             <div key={i} style={{
               padding: '10px 12px', background: C.bg,
               border: `1px solid ${C.border}`, borderRadius: 6,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: C.text, flex: 1, minWidth: 0 }}>
-                  {c.proveedor.length > 28 ? c.proveedor.slice(0, 26) + '…' : c.proveedor}
+                  {(c.proveedor_adjudicado || 'Sin nombre').length > 28 ? (c.proveedor_adjudicado || '').slice(0, 26) + '…' : (c.proveedor_adjudicado || 'Sin nombre')}
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.orange, flexShrink: 0, marginLeft: 8 }}>
-                  {fmtCOP(c.valor)}
+                  {fmtCOP(Number(c.valor_del_contrato) || 0)}
                 </span>
               </div>
-              <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>{c.entidad} — {c.fecha}</div>
+              <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>{c.nombre_entidad} — {c.fecha_de_firma ? c.fecha_de_firma.slice(0, 10) : '—'}</div>
               <div style={{ display: 'flex', gap: 6 }}>
                 <span style={{ fontSize: 8, padding: '1px 6px', borderRadius: 3, background: 'rgba(245,158,11,.15)', color: '#f59e0b', fontWeight: 600 }}>
-                  {c.modalidad}
+                  {c.modalidad_de_contratacion || '—'}
                 </span>
               </div>
             </div>
@@ -949,8 +1023,8 @@ function ProposalTracker({ proceso }: { proceso: ProcesoData | null }) {
               Inteligencia de mercado
             </div>
             <div style={{ fontSize: 10, color: C.textSec, lineHeight: 1.5 }}>
-              Ticket promedio: <span style={{ color: C.text, fontWeight: 600 }}>{fmtCOP(Math.round(CONTRATOS_SIMILARES.reduce((a, c) => a + c.valor, 0) / CONTRATOS_SIMILARES.length))}</span><br />
-              Competidores activos: <span style={{ color: C.orange, fontWeight: 600 }}>{new Set(CONTRATOS_SIMILARES.map(c => c.proveedor)).size}</span> en {CLIENTE_DEMO.departamentos.length} deptos.
+              Ticket promedio: <span style={{ color: C.text, fontWeight: 600 }}>{fmtCOP(Math.round(contratos.reduce((a, c) => a + (Number(c.valor_del_contrato) || 0), 0) / (contratos.length || 1)))}</span><br />
+              Competidores activos: <span style={{ color: C.orange, fontWeight: 600 }}>{new Set(contratos.map(c => c.proveedor_adjudicado)).size}</span> en {cliente ? parseCliente(cliente).departamentos.length : 0} deptos.
             </div>
           </div>
         </div>
@@ -1035,8 +1109,39 @@ export default function Dashboard() {
   const [activeId, setActiveId] = useState<number | null>(1)
 
   const [panelOpen, setPanelOpen] = useState(true)
-  const cTotal = useCounter(PROCESOS_COMPATIBLES.length)
-  const presupuestoTotal = PROCESOS_COMPATIBLES.reduce((a, p) => a + p.presupuesto, 0)
+  const [cliente, setCliente] = useState<ClienteApi | null>(null)
+  const [procesos, setProcesos] = useState<ProcesoData[]>([])
+  const [contratos, setContratos] = useState<ContratoApi[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`${API}/clientes`)
+      .then(r => r.json())
+      .then((clientes: ClienteApi[]) => {
+        if (clientes.length === 0) {
+          setLoading(false)
+          return
+        }
+        const c = clientes[0]
+        setCliente(c)
+        const parsed = parseCliente(c)
+        return Promise.all([
+          fetch(`${API}/clientes/${c.id}/procesos`).then(r => r.json()),
+          fetch(`${API}/clientes/${c.id}/contratos-similares`).then(r => r.json()),
+        ]).then(([procesosApi, contratosApi]) => {
+          const mapped = (procesosApi as ProcesoApi[]).map(p => mapearProceso(p, parsed))
+          setProcesos(mapped.sort((a, b) => (b.score || 0) - (a.score || 0)))
+          setContratos(contratosApi as ContratoApi[])
+          setLoading(false)
+        })
+      })
+      .catch(err => { setError(err.message); setLoading(false) })
+  }, [])
+
+  const cTotal = useCounter(procesos.length)
+  const presupuestoTotal = procesos.reduce((a, p) => a + p.presupuesto, 0)
   const cBudget = useCounter(Math.round(presupuestoTotal / 1_000_000_000))
 
   const DEPTOS_COLOMBIA = [
@@ -1049,10 +1154,10 @@ export default function Dashboard() {
     'VALLE DEL CAUCA', 'VAUPÉS', 'VICHADA',
   ]
   const deptosUnicos = ['Todos', ...DEPTOS_COLOMBIA]
-  const tiposUnicos = ['Todos', 'Infraestructura vial', 'Adecuaciones', 'Construcciones']
+  const tiposUnicos = ['Todos', ...Array.from(new Set(procesos.map(p => p.tipo)))]
   const filtros = ['Todos', 'Alta compat.', 'Media compat.', 'Cierre urgente']
 
-  const procesados = PROCESOS_COMPATIBLES.filter(p => {
+  const procesados = procesos.filter(p => {
     if (filtro === 'Alta compat.' && (p.score || 0) < 70) return false
     if (filtro === 'Media compat.' && ((p.score || 0) < 40 || (p.score || 0) >= 70)) return false
     if (filtro === 'Cierre urgente' && new Date(p.cierre).getTime() - Date.now() >= 86400000) return false
@@ -1062,10 +1167,10 @@ export default function Dashboard() {
     return true
   })
 
-  const activeProceso = PROCESOS_COMPATIBLES.find(p => p.id === activeId) ?? null
-  const urgentes = PROCESOS_COMPATIBLES.filter(p => new Date(p.cierre).getTime() - Date.now() < 86400000).length
+  const activeProceso = procesos.find(p => p.id === activeId) ?? null
+  const urgentes = procesos.filter(p => new Date(p.cierre).getTime() - Date.now() < 86400000).length
 
-  const altaCompat = PROCESOS_COMPATIBLES.filter(p => (p.score || 0) >= 70).length
+  const altaCompat = procesos.filter(p => (p.score || 0) >= 70).length
 
   const METRICAS = [
     {
@@ -1106,17 +1211,24 @@ export default function Dashboard() {
         </div>
         {/* Nav izquierda + Mis Propuestas juntos */}
         <nav style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          {(['Dashboard', 'Clientes', 'Historial', 'Configuración'] as const).map((n, i) => (
-            <button key={n} style={{
-              background: i === 0 ? 'rgba(249,115,22,.12)' : 'none',
-              border: i === 0 ? `1px solid rgba(249,115,22,.25)` : '1px solid transparent',
-              color: i === 0 ? C.orange : C.textSec, padding: '5px 14px', borderRadius: 5,
-              fontSize: 13, cursor: 'pointer', fontWeight: i === 0 ? 600 : 400,
+          {([
+            { label: 'Dashboard', href: '/dashboard', active: true },
+            { label: 'Clientes', href: '/clientes/nuevo', active: false },
+            { label: 'Calculadoras', href: '/calculadoras', active: false },
+            { label: 'Historial', href: '#', active: false },
+            { label: 'Configuración', href: '#', active: false },
+          ] as const).map((n) => (
+            <Link key={n.label} href={n.href} style={{
+              textDecoration: 'none',
+              background: n.active ? 'rgba(249,115,22,.12)' : 'none',
+              border: n.active ? `1px solid rgba(249,115,22,.25)` : '1px solid transparent',
+              color: n.active ? C.orange : C.textSec, padding: '5px 14px', borderRadius: 5,
+              fontSize: 13, cursor: 'pointer', fontWeight: n.active ? 600 : 400,
               transition: 'all 150ms',
             }}
-              onMouseEnter={e => { if (i > 0) e.currentTarget.style.color = C.text }}
-              onMouseLeave={e => { if (i > 0) e.currentTarget.style.color = C.textSec }}
-            >{n}</button>
+              onMouseEnter={e => { if (!n.active) e.currentTarget.style.color = C.text }}
+              onMouseLeave={e => { if (!n.active) e.currentTarget.style.color = C.textSec }}
+            >{n.label}</Link>
           ))}
           <div style={{ width: 1, height: 20, background: C.border, margin: '0 8px' }} />
           <MisPropuestasDropdown />
@@ -1168,32 +1280,34 @@ export default function Dashboard() {
               <p style={{ fontSize: 13, color: C.textSec }}>Monitoreo automatizado de contratación pública en SECOP II — Colombia.</p>
             </div>
 
-            {/* ─ Cliente Demo ─ */}
+            {/* ─ Cliente activo ─ */}
             <div style={{ position: 'relative', zIndex: 1, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 14, background: `${C.card}aa`, backdropFilter: 'blur(6px)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px' }}>
               <div style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(249,115,22,.18)', border: `1px solid rgba(249,115,22,.3)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: C.orange }}>{CLIENTE_DEMO.nombre.charAt(0)}</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: C.orange }}>{cliente ? cliente.nombre.charAt(0) : '?'}</span>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 3 }}>{CLIENTE_DEMO.nombre}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {CLIENTE_DEMO.departamentos.map(d => (
-                    <span key={d} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(34,197,94,.15)', color: C.green, fontWeight: 500 }}>
-                      {d}
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 3 }}>{cliente ? cliente.nombre : 'Cargando cliente...'}</div>
+                {cliente && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {parseCliente(cliente).departamentos.map(d => (
+                      <span key={d} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(34,197,94,.15)', color: C.green, fontWeight: 500 }}>
+                        {d}
+                      </span>
+                    ))}
+                    {parseCliente(cliente).unspsc_codes.map(u => (
+                      <span key={u} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(59,130,246,.15)', color: '#3b82f6', fontWeight: 500 }}>
+                        {labelUNSPSC(u.slice(0, 4))}
+                      </span>
+                    ))}
+                    <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(249,115,22,.15)', color: C.orange, fontWeight: 500 }}>
+                      ${(cliente.presupuesto_min / 1_000_000).toFixed(0)}M – ${(cliente.presupuesto_max / 1_000_000_000).toFixed(1)}B
                     </span>
-                  ))}
-                  {CLIENTE_DEMO.unspsc_labels.map(l => (
-                    <span key={l} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(59,130,246,.15)', color: '#3b82f6', fontWeight: 500 }}>
-                      {l}
-                    </span>
-                  ))}
-                  <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(249,115,22,.15)', color: C.orange, fontWeight: 500 }}>
-                    ${(CLIENTE_DEMO.presupuesto_min / 1_000_000).toFixed(0)}M – ${(CLIENTE_DEMO.presupuesto_max / 1_000_000_000).toFixed(1)}B
-                  </span>
-                </div>
+                  </div>
+                )}
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.08em', textTransform: 'uppercase' }}>Perfil activo</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.orange }}>{PROCESOS_COMPATIBLES.filter(p => (p.score || 0) >= 70).length} matches</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.orange }}>{procesos.filter(p => (p.score || 0) >= 70).length} matches</div>
               </div>
             </div>
 
@@ -1265,14 +1379,26 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* ─ Estado de carga / error ─ */}
+          {loading && (
+            <div style={{ color: C.textSec, padding: 48, textAlign: 'center' }}>Cargando oportunidades reales de SECOP II...</div>
+          )}
+          {error && !loading && (
+            <div style={{ background: 'rgba(239,68,68,.1)', border: `1px solid ${C.red}`, color: C.red, padding: 16, borderRadius: 6, fontSize: 13 }}>
+              Error: {error}
+            </div>
+          )}
+
           {/* ─ Grid de cards ─ */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {procesados.map((p, i) => (
-              <div key={p.id} className="row-enter" style={{ animationDelay: `${i * 60}ms` }}>
-                <ProcesoCard p={p} active={activeId === p.id} onClick={() => setActiveId(p.id === activeId ? null : p.id)} />
-              </div>
-            ))}
-          </div>
+          {!loading && !error && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              {procesados.map((p, i) => (
+                <div key={p.id} className="row-enter" style={{ animationDelay: `${i * 60}ms` }}>
+                  <ProcesoCard p={p} active={activeId === p.id} onClick={() => setActiveId(p.id === activeId ? null : p.id)} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── STRIP TOGGLE — entre columnas ── */}
@@ -1327,7 +1453,7 @@ export default function Dashboard() {
             pointerEvents: panelOpen ? 'auto' : 'none',
             minWidth: 336,
           }}>
-            <ProposalTracker proceso={activeProceso} />
+            <ProposalTracker proceso={activeProceso} cliente={cliente} contratos={contratos} />
           </div>
         </div>
       </div>

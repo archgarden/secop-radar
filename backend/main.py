@@ -1,16 +1,28 @@
+import json
 import logging
+import os
+import shutil
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import Base, SessionLocal, engine, get_db
-from models import Cliente, LogEjecucion, Proceso, ProcesoCliente
+from models import AnalisisProceso, Cliente, Documento, LogEjecucion, Proceso, ProcesoCliente
+from preseleccion import analizar_preseleccion
 from notificaciones import enviar_alerta_nuevos_procesos
 from radar import consultar_contratos_similares, correr_radar
+from calculadoras import (
+    calcular_capacidad_financiera,
+    calcular_capacidad_residual,
+    calcular_precio_artificialmente_bajo,
+    clasificar_mipyme,
+    consolidar_experiencia_smmlv,
+)
 
 logger = logging.getLogger("main")
 
@@ -257,3 +269,300 @@ def contratos_similares(cliente_id: int, db: Session = Depends(get_db)):
     except Exception as exc:
         logger.exception("Error consultando contratos similares: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+# ---------- Documentos ----------
+
+STORAGE_PATH = os.getenv("STORAGE_PATH", "../storage/pliegos")
+DOC_DIR = Path(STORAGE_PATH).parent / "documentos"
+
+
+class DocumentoOut(BaseModel):
+    id: int
+    cliente_id: int
+    nombre: str
+    filename: str
+    estado: str
+    fecha_subida: str
+
+    class Config:
+        from_attributes = True
+
+
+@app.get("/clientes/{cliente_id}/documentos", response_model=list[DocumentoOut])
+def listar_documentos(cliente_id: int, db: Session = Depends(get_db)):
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    docs = db.query(Documento).filter(Documento.cliente_id == cliente_id).all()
+    resultado = []
+    for d in docs:
+        resultado.append(
+            DocumentoOut(
+                id=d.id,
+                cliente_id=d.cliente_id,
+                nombre=d.nombre,
+                filename=d.filename,
+                estado=d.estado,
+                fecha_subida=d.fecha_subida.isoformat(),
+            )
+        )
+    return resultado
+
+
+@app.post("/clientes/{cliente_id}/documentos", response_model=DocumentoOut, status_code=201)
+def subir_documento(
+    cliente_id: int,
+    nombre: str = Form(...),
+    archivo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    if not nombre:
+        raise HTTPException(status_code=400, detail="El nombre del documento es obligatorio")
+
+    ext = Path(archivo.filename or "documento").suffix
+    safe_filename = f"{cliente_id}_{nombre.replace(' ', '_').lower()}{ext}"
+    dest_dir = DOC_DIR / str(cliente_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = dest_dir / safe_filename
+
+    try:
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(archivo.file, buffer)
+    except Exception as exc:
+        logger.exception("Error guardando documento: %s", exc)
+        raise HTTPException(status_code=500, detail="No se pudo guardar el archivo")
+    finally:
+        archivo.file.close()
+
+    doc = Documento(
+        cliente_id=cliente_id,
+        nombre=nombre,
+        filename=archivo.filename or safe_filename,
+        path=str(dest_path),
+        estado="pendiente",
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    return DocumentoOut(
+        id=doc.id,
+        cliente_id=doc.cliente_id,
+        nombre=doc.nombre,
+        filename=doc.filename,
+        estado=doc.estado,
+        fecha_subida=doc.fecha_subida.isoformat(),
+    )
+
+
+@app.delete("/documentos/{documento_id}")
+def eliminar_documento(documento_id: int, db: Session = Depends(get_db)):
+    doc = db.query(Documento).filter(Documento.id == documento_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    try:
+        Path(doc.path).unlink(missing_ok=True)
+    except Exception as exc:
+        logger.exception("Error eliminando archivo: %s", exc)
+    db.delete(doc)
+    db.commit()
+    return {"ok": True}
+
+
+SMMLV = int(os.getenv("SMMLV", "1423500"))
+
+MODALIDADES = [
+    (10 * SMMLV, "Contratación directa", "Hasta 10 SMMLV. Proceso ágil sin publicación prolongada."),
+    (50 * SMMLV, "Mínima cuantía", "Hasta 50 SMMLV. Proceso simplificado para contratos menores."),
+    (400 * SMMLV, "Selección abreviada", "Hasta 400 SMMLV. Proceso intermedio con menor trámite que licitación."),
+    (float("inf"), "Licitación pública", "Mayor a 400 SMMLV. Proceso competitivo completo."),
+]
+
+
+@app.get("/modalidad/recomendada/{valor}")
+def modalidad_recomendada(valor: int):
+    for limite, modalidad, descripcion in MODALIDADES:
+        if valor <= limite:
+            return {
+                "valor": valor,
+                "smmlv": SMMLV,
+                "modalidad": modalidad,
+                "descripcion": descripcion,
+            }
+    return {
+        "valor": valor,
+        "smmlv": SMMLV,
+        "modalidad": "Licitación pública",
+        "descripcion": "Mayor a 400 SMMLV. Proceso competitivo completo.",
+    }
+
+
+# ---------- Pre-selección de procesos ----------
+
+
+class AnalisisOut(BaseModel):
+    id: int
+    proceso_id: int
+    cliente_id: int
+    score_preseleccion: int
+    recomendacion: str
+    faltantes: list[str]
+    riesgos: list[str]
+    detalle: dict
+    fecha_analisis: str
+
+    class Config:
+        from_attributes = True
+
+
+@app.post("/procesos/{proceso_id}/preseleccion/{cliente_id}", response_model=AnalisisOut)
+def preseleccionar_proceso(proceso_id: int, cliente_id: int, db: Session = Depends(get_db)):
+    try:
+        analisis = analizar_preseleccion(proceso_id, cliente_id, db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Error en pre-selección: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return AnalisisOut(
+        id=analisis.id,
+        proceso_id=analisis.proceso_id,
+        cliente_id=analisis.cliente_id,
+        score_preseleccion=analisis.score_preseleccion,
+        recomendacion=analisis.recomendacion,
+        faltantes=json.loads(analisis.faltantes),
+        riesgos=json.loads(analisis.riesgos),
+        detalle=json.loads(analisis.detalle),
+        fecha_analisis=analisis.fecha_analisis.isoformat(),
+    )
+
+
+@app.get("/procesos/{proceso_id}/preseleccion/{cliente_id}", response_model=AnalisisOut)
+def obtener_preseleccion(proceso_id: int, cliente_id: int, db: Session = Depends(get_db)):
+    analisis = (
+        db.query(AnalisisProceso)
+        .filter(AnalisisProceso.proceso_id == proceso_id, AnalisisProceso.cliente_id == cliente_id)
+        .first()
+    )
+    if not analisis:
+        raise HTTPException(status_code=404, detail="No hay análisis previo. Ejecute POST primero.")
+
+    return AnalisisOut(
+        id=analisis.id,
+        proceso_id=analisis.proceso_id,
+        cliente_id=analisis.cliente_id,
+        score_preseleccion=analisis.score_preseleccion,
+        recomendacion=analisis.recomendacion,
+        faltantes=json.loads(analisis.faltantes),
+        riesgos=json.loads(analisis.riesgos),
+        detalle=json.loads(analisis.detalle),
+        fecha_analisis=analisis.fecha_analisis.isoformat(),
+    )
+
+
+# ---------- Calculadoras ----------
+
+
+class CapacidadFinancieraIn(BaseModel):
+    activo_corriente: float
+    pasivo_corriente: float
+    activo_total: float
+    pasivo_total: float
+    patrimonio: float
+    utilidad_operacional: float
+    gastos_intereses: float
+
+
+@app.post("/calculadoras/capacidad-financiera")
+def capacidad_financiera(payload: CapacidadFinancieraIn):
+    return calcular_capacidad_financiera(
+        activo_corriente=payload.activo_corriente,
+        pasivo_corriente=payload.pasivo_corriente,
+        activo_total=payload.activo_total,
+        pasivo_total=payload.pasivo_total,
+        patrimonio=payload.patrimonio,
+        utilidad_operacional=payload.utilidad_operacional,
+        gastos_intereses=payload.gastos_intereses,
+    )
+
+
+class ContratoVigente(BaseModel):
+    valor: float
+    plazo_meses: int
+
+
+class CapacidadResidualIn(BaseModel):
+    presupuesto_proceso: float
+    plazo_proceso_meses: int
+    anticipo_pct: float
+    ingresos_operacionales_anuales: float
+    contratos_vigentes: list[ContratoVigente] = []
+
+
+@app.post("/calculadoras/capacidad-residual")
+def capacidad_residual(payload: CapacidadResidualIn):
+    return calcular_capacidad_residual(
+        presupuesto_proceso=payload.presupuesto_proceso,
+        plazo_proceso_meses=payload.plazo_proceso_meses,
+        anticipo_pct=payload.anticipo_pct,
+        ingresos_operacionales_anuales=payload.ingresos_operacionales_anuales,
+        contratos_vigentes=[c.model_dump() for c in payload.contratos_vigentes],
+    )
+
+
+class PrecioArtificialmenteBajoIn(BaseModel):
+    presupuesto_oficial: float
+    ofertas: list[float]
+    umbral_pct: float = 70.0
+
+
+@app.post("/calculadoras/precio-artificialmente-bajo")
+def precio_artificialmente_bajo(payload: PrecioArtificialmenteBajoIn):
+    return calcular_precio_artificialmente_bajo(
+        presupuesto_oficial=payload.presupuesto_oficial,
+        ofertas=payload.ofertas,
+        umbral_pct=payload.umbral_pct,
+    )
+
+
+class ContratoExperiencia(BaseModel):
+    valor: float
+    fecha_inicio: str
+    fecha_fin: str
+
+
+class ExperienciaSMMLVIn(BaseModel):
+    contratos: list[ContratoExperiencia]
+    smmlv: float | None = None
+
+
+@app.post("/calculadoras/experiencia-smmlv")
+def experiencia_smmlv(payload: ExperienciaSMMLVIn):
+    return consolidar_experiencia_smmlv(
+        contratos=[c.model_dump() for c in payload.contratos],
+        smmlv=payload.smmlv,
+    )
+
+
+class MipymeIn(BaseModel):
+    sector: str
+    empleados: int
+    ingresos_anuales: float
+
+
+@app.post("/calculadoras/mipyme")
+def mipyme(payload: MipymeIn):
+    try:
+        return clasificar_mipyme(
+            sector=payload.sector,
+            empleados=payload.empleados,
+            ingresos_anuales=payload.ingresos_anuales,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

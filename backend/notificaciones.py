@@ -1,6 +1,8 @@
 import logging
 import os
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Iterable
 
 import resend
@@ -9,6 +11,13 @@ from dotenv import load_dotenv
 from models import Cliente, Proceso
 
 load_dotenv()
+
+# Asegurar salida UTF-8 en consolas Windows para evitar errores al imprimir HTML
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 REMITENTE = os.getenv("RESEND_FROM", "SECOP Radar <radar@archgarden.ai>")

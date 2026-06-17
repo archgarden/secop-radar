@@ -4,6 +4,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -29,6 +30,7 @@ class Cliente(Base):
 
     matches = relationship("ProcesoCliente", back_populates="cliente")
     logs = relationship("LogEjecucion", back_populates="cliente")
+    documentos = relationship("Documento", back_populates="cliente")
 
 
 class Proceso(Base):
@@ -75,3 +77,34 @@ class LogEjecucion(Base):
     error = Column(Text, nullable=True)
 
     cliente = relationship("Cliente", back_populates="logs")
+
+
+class Documento(Base):
+    __tablename__ = "documentos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
+    nombre = Column(String, nullable=False)
+    filename = Column(String, nullable=False)
+    path = Column(String, nullable=False)
+    estado = Column(String, nullable=False, default="pendiente")
+    fecha_subida = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    cliente = relationship("Cliente", back_populates="documentos")
+
+
+class AnalisisProceso(Base):
+    __tablename__ = "analisis_procesos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    proceso_id = Column(Integer, ForeignKey("procesos.id"), nullable=False)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
+    score_preseleccion = Column(Integer, nullable=False, default=0)
+    recomendacion = Column(String, nullable=False, default="pendiente")
+    faltantes = Column(Text, nullable=False, default="[]")
+    riesgos = Column(Text, nullable=False, default="[]")
+    detalle = Column(Text, nullable=False, default="{}")
+    fecha_analisis = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    proceso = relationship("Proceso", backref="analisis")
+    cliente = relationship("Cliente", backref="analisis_procesos")

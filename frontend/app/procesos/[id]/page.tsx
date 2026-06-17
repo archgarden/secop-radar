@@ -181,6 +181,7 @@ export default function ProcesosCliente() {
                   <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 500 }}>Presupuesto</th>
                   <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Flags</th>
                   <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Pliego</th>
+                  <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Acción</th>
                 </tr>
               </thead>
               <tbody>
@@ -256,6 +257,22 @@ export default function ProcesosCliente() {
                           Ver
                         </a>
                       ) : '—'}
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                      <Link
+                        href={`/preseleccion?cliente_id=${clienteId}&proceso_id=${p.id}`}
+                        style={{
+                          background: 'var(--orange)',
+                          color: '#fff',
+                          fontSize: 12,
+                          padding: '4px 10px',
+                          borderRadius: 3,
+                          textDecoration: 'none',
+                          fontWeight: 600,
+                        }}
+                      >
+                        Pre-seleccionar
+                      </Link>
                     </td>
                   </tr>
                 ))}

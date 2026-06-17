@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+import urllib.parse
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ load_dotenv()
 
 SOCRATA_URL = "https://www.datos.gov.co/resource/p6dx-8zbt.json"
 SOCRATA_CONTRATOS_URL = "https://www.datos.gov.co/resource/jbjy-vk9h.json"
+SOCRATA_APP_TOKEN = os.getenv("SOCRATA_APP_TOKEN", "")
 SOCRATA_CLIENT_ID = os.getenv("SOCRATA_CLIENT_ID", "")
 SOCRATA_CLIENT_SECRET = os.getenv("SOCRATA_CLIENT_SECRET", "")
 
@@ -95,26 +97,30 @@ def _construir_where(
     return " AND ".join(filtros)
 
 
-def _auth() -> tuple[str, str] | None:
-    """Devuelve credenciales Basic Auth si están configuradas, o None."""
-    if SOCRATA_CLIENT_ID and SOCRATA_CLIENT_SECRET:
-        return (SOCRATA_CLIENT_ID, SOCRATA_CLIENT_SECRET)
-    return None
+def _socrata_headers() -> dict[str, str]:
+    """Devuelve headers para Socrata, incluyendo App Token si existe."""
+    headers: dict[str, str] = {"Accept": "application/json"}
+    if SOCRATA_APP_TOKEN:
+        headers["X-App-Token"] = SOCRATA_APP_TOKEN
+    return headers
 
 
 def _consultar_socrata(where: str) -> list[dict]:
-    auth = _auth()
-    params: dict[str, Any] = {
-        "$limit": LIMITE_REGISTROS,
-        "$order": "fecha_de_publicacion_del DESC",
-    }
+    # Se construye la query string manualmente porque algunas versiones de
+    # requests/httpx interpretan mal las claves que empiezan con '$'.
+    query_parts: list[str] = [
+        f"%24limit={LIMITE_REGISTROS}",
+        "%24order=" + urllib.parse.quote("fecha_de_publicacion_del DESC", safe=""),
+    ]
     if where:
-        params["$where"] = where
+        query_parts.append("%24where=" + urllib.parse.quote(where, safe=""))
+    url = f"{SOCRATA_URL}?{'&'.join(query_parts)}"
+    headers = _socrata_headers()
 
     ultimo_error: Exception | None = None
     for intento in range(1, MAX_REINTENTOS + 1):
         try:
-            r = requests.get(SOCRATA_URL, auth=auth, params=params, timeout=30)
+            r = requests.get(url, headers=headers, timeout=30)
             r.raise_for_status()
             return r.json()
         except requests.RequestException as exc:
@@ -302,7 +308,6 @@ def consultar_contratos_similares(
     UNSPSC y departamento. Devuelve datos de inteligencia de mercado:
     quién ganó, por cuánto, en qué modalidad.
     """
-    auth = _auth()
     unspsc_prefixes = [c[:4] for c in unspsc_codes]
 
     # Construir WHERE para SoQL
@@ -324,26 +329,28 @@ def consultar_contratos_similares(
 
     where = " AND ".join(conditions) if conditions else ""
 
-    params: dict[str, Any] = {
-        "$limit": limit,
-        "$order": "fecha_de_firma DESC",
-        "$select": (
+    query_parts: list[str] = [
+        f"%24limit={limit}",
+        "%24order=" + urllib.parse.quote("fecha_de_firma DESC", safe=""),
+        "%24select=" + urllib.parse.quote(
             "nombre_entidad, proveedor_adjudicado, valor_del_contrato, "
             "codigo_de_categoria_principal, descripcion_del_proceso, "
             "modalidad_de_contratacion, estado_contrato, "
-            "fecha_de_firma, departamento, urlproceso"
+            "fecha_de_firma, departamento, urlproceso",
+            safe="",
         ),
-    }
+    ]
     if where:
-        params["$where"] = where
+        query_parts.append("%24where=" + urllib.parse.quote(where, safe=""))
+    url = f"{SOCRATA_CONTRATOS_URL}?{'&'.join(query_parts)}"
+    headers = _socrata_headers()
 
     ultimo_error: Exception | None = None
     for intento in range(1, MAX_REINTENTOS + 1):
         try:
             r = requests.get(
-                SOCRATA_CONTRATOS_URL,
-                auth=auth,
-                params=params,
+                url,
+                headers=headers,
                 timeout=30,
             )
             r.raise_for_status()
