@@ -126,6 +126,8 @@ class ProcesoOut(BaseModel):
     url_documento: str | None
     tiene_adenda: bool
     score_match: int
+    fecha_cierre: str | None
+    fecha_publicacion: str | None
 
     class Config:
         from_attributes = True
@@ -211,9 +213,32 @@ def procesos_cliente(cliente_id: int, db: Session = Depends(get_db)):
                 url_documento=proceso.url_documento,
                 tiene_adenda=proceso.tiene_adenda,
                 score_match=score,
+                fecha_cierre=proceso.fecha_cierre.isoformat() if proceso.fecha_cierre else None,
+                fecha_publicacion=proceso.fecha_publicacion.isoformat() if proceso.fecha_publicacion else None,
             )
         )
     return resultado
+
+
+@app.get("/procesos/{proceso_id}", response_model=ProcesoOut)
+def obtener_proceso(proceso_id: int, db: Session = Depends(get_db)):
+    proceso = db.query(Proceso).filter(Proceso.id == proceso_id).first()
+    if not proceso:
+        raise HTTPException(status_code=404, detail="Proceso no encontrado")
+    return ProcesoOut(
+        id=proceso.id,
+        numero_proceso=proceso.numero_proceso,
+        entidad=proceso.entidad,
+        objeto=proceso.objeto,
+        presupuesto=proceso.presupuesto,
+        departamento=proceso.departamento,
+        unspsc_code=proceso.unspsc_code,
+        url_documento=proceso.url_documento,
+        tiene_adenda=proceso.tiene_adenda,
+        score_match=0,
+        fecha_cierre=proceso.fecha_cierre.isoformat() if proceso.fecha_cierre else None,
+        fecha_publicacion=proceso.fecha_publicacion.isoformat() if proceso.fecha_publicacion else None,
+    )
 
 
 @app.post("/radar/correr/{cliente_id}")

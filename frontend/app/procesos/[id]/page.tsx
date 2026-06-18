@@ -239,24 +239,20 @@ export default function ProcesosCliente() {
                       )}
                     </td>
                     <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                      {p.url_documento ? (
-                        <a
-                          href={typeof p.url_documento === 'string' && p.url_documento.startsWith('http')
-                            ? p.url_documento
-                            : `https://www.secop.gov.co/`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: 'var(--orange)',
-                            fontSize: 12,
-                            border: '1px solid rgba(59,130,246,0.3)',
-                            padding: '3px 10px',
-                            borderRadius: 3,
-                          }}
-                        >
-                          Ver
-                        </a>
-                      ) : '—'}
+                      <Link
+                        href={`/procesos/resumen?cliente_id=${clienteId}&proceso_id=${p.id}`}
+                        style={{
+                          color: 'var(--orange)',
+                          fontSize: 12,
+                          border: '1px solid rgba(249,115,22,0.3)',
+                          padding: '3px 10px',
+                          borderRadius: 3,
+                          textDecoration: 'none',
+                          fontWeight: 600,
+                        }}
+                      >
+                        Ver
+                      </Link>
                     </td>
                     <td style={{ padding: '10px 14px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
