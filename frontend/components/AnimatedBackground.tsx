@@ -1,11 +1,16 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useBackgroundMode, type BackgroundMode } from './useBackgroundMode'
 
 export default function AnimatedBackground({ mode }: { mode?: BackgroundMode }) {
-  const { mode: savedMode } = useBackgroundMode()
+  const { mode: savedMode, mounted } = useBackgroundMode()
   const active = mode || savedMode
+
+  if (!mounted) {
+    return <Canvas />
+  }
+
   if (active === 'waves') return <WavesBackground />
   if (active === 'gradient') return <GradientBackground />
   if (active === 'particles') return <ParticlesBackground />
@@ -90,7 +95,7 @@ function MeshBackground() {
     }
   }, [])
 
-  return <Canvas ref={ref} />
+  return <Canvas canvasRef={ref} />
 }
 
 function WavesBackground() {
@@ -147,7 +152,7 @@ function WavesBackground() {
     }
   }, [])
 
-  return <Canvas ref={ref} />
+  return <Canvas canvasRef={ref} />
 }
 
 function GradientBackground() {
@@ -207,7 +212,7 @@ function GradientBackground() {
     }
   }, [])
 
-  return <Canvas ref={ref} />
+  return <Canvas canvasRef={ref} />
 }
 
 function ParticlesBackground() {
@@ -279,7 +284,7 @@ function ParticlesBackground() {
     }
   }, [])
 
-  return <Canvas ref={ref} />
+  return <Canvas canvasRef={ref} />
 }
 
 function OrbsBackground() {
@@ -342,13 +347,13 @@ function OrbsBackground() {
     }
   }, [])
 
-  return <Canvas ref={ref} />
+  return <Canvas canvasRef={ref} />
 }
 
-const Canvas = React.forwardRef<HTMLCanvasElement>(function Canvas(_, ref) {
+function Canvas({ canvasRef }: { canvasRef?: React.Ref<HTMLCanvasElement> }) {
   return (
     <canvas
-      ref={ref}
+      ref={canvasRef}
       style={{
         position: 'absolute',
         inset: 0,
@@ -359,4 +364,4 @@ const Canvas = React.forwardRef<HTMLCanvasElement>(function Canvas(_, ref) {
       }}
     />
   )
-})
+}

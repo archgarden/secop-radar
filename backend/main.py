@@ -299,8 +299,13 @@ def contratos_similares(cliente_id: int, db: Session = Depends(get_db)):
 
 # ---------- Documentos ----------
 
-STORAGE_PATH = os.getenv("STORAGE_PATH", "../storage/pliegos")
-DOC_DIR = Path(STORAGE_PATH).parent / "documentos"
+_PROJECT_DIR = Path(__file__).resolve().parent.parent
+_STORAGE_ENV = os.getenv("STORAGE_PATH", "../storage/pliegos")
+if Path(_STORAGE_ENV).is_absolute():
+    STORAGE_PATH = Path(_STORAGE_ENV)
+else:
+    STORAGE_PATH = (_PROJECT_DIR / _STORAGE_ENV).resolve()
+DOC_DIR = STORAGE_PATH.parent / "documentos"
 
 
 class DocumentoOut(BaseModel):
