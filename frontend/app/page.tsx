@@ -20,6 +20,26 @@ const C = {
   header: '#0a0d14',
 }
 
+function useCountUp(target: number, duration = 1600, delay = 0) {
+  const [value, setValue] = useState(0)
+  useEffect(() => {
+    let raf: number
+    const startTimeout = setTimeout(() => {
+      let start: number | null = null
+      const step = (timestamp: number) => {
+        if (!start) start = timestamp
+        const progress = Math.min((timestamp - start) / duration, 1)
+        const eased = 1 - Math.pow(1 - progress, 3)
+        setValue(eased * target)
+        if (progress < 1) raf = requestAnimationFrame(step)
+      }
+      raf = requestAnimationFrame(step)
+    }, delay)
+    return () => { clearTimeout(startTimeout); cancelAnimationFrame(raf) }
+  }, [target, duration, delay])
+  return value
+}
+
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [email, setEmail] = useState('')
@@ -43,8 +63,13 @@ export default function LandingPage() {
     { label: 'Pre-selección', href: '#analytics' },
     { label: 'Pliegos', href: '#procurement' },
     { label: 'Calculadoras', href: '#calculadoras' },
-    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Comenzar', href: '/clientes/nuevo' },
   ]
+
+  const countProcesos = useCountUp(186, 1600, 300)
+  const countScore = useCountUp(56.7, 1600, 500)
+  const countHours = useCountUp(4, 1200, 700)
+  const countProgress = useCountUp(78, 1600, 300)
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Inter, sans-serif' }}>
@@ -91,12 +116,12 @@ export default function LandingPage() {
             <a href="#" style={{ color: C.textSec }} aria-label="Notificaciones">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             </a>
-            <Link href="/dashboard" style={{
+            <Link href="/clientes/nuevo" style={{
               background: C.orange, color: '#fff', fontSize: 12, fontWeight: 700,
               padding: '8px 16px', borderRadius: 4, textDecoration: 'none', letterSpacing: '.04em',
               transition: 'background 150ms',
             }} onMouseEnter={e => (e.currentTarget.style.background = C.orangeH)} onMouseLeave={e => (e.currentTarget.style.background = C.orange)}>
-              Ingresar
+              Comenzar
             </Link>
           </div>
 
@@ -119,7 +144,7 @@ export default function LandingPage() {
           {navLinks.map(l => (
             <a key={l.label} href={l.href} style={{ color: C.text, fontSize: 14 }} onClick={() => setMobileMenuOpen(false)}>{l.label}</a>
           ))}
-          <Link href="/dashboard" style={{ color: C.orange, fontWeight: 700 }}>Ingresar</Link>
+          <Link href="/clientes/nuevo" style={{ color: C.orange, fontWeight: 700 }}>Comenzar</Link>
         </div>
       )}
 
@@ -167,12 +192,12 @@ export default function LandingPage() {
               </p>
 
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                <Link href="/dashboard" style={{
+                <Link href="/clientes/nuevo" style={{
                   background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700,
                   padding: '12px 24px', borderRadius: 4, textDecoration: 'none', letterSpacing: '.04em',
                   transition: 'background 150ms',
                 }} onMouseEnter={e => (e.currentTarget.style.background = C.orangeH)} onMouseLeave={e => (e.currentTarget.style.background = C.orange)}>
-                  VER DASHBOARD
+                  COMENZAR AHORA
                 </Link>
                 <a href="#radar" style={{
                   background: 'transparent', color: C.text, fontSize: 13, fontWeight: 700,
@@ -184,37 +209,88 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Live data panel */}
+            {/* Premium live data card */}
             <div style={{
-              background: 'rgba(26,29,39,.75)', border: `1px solid ${C.border}`, borderRadius: 8,
-              padding: 24, backdropFilter: 'blur(8px)', boxShadow: '0 24px 60px rgba(0,0,0,.5)',
+              background: 'rgba(26,29,39,0.65)', border: `1px solid ${C.border}`, borderRadius: 8,
+              padding: 24, backdropFilter: 'blur(14px) saturate(140%)', boxShadow: '0 24px 70px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06)',
             }}>
+              {/* header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
                 <span style={{ fontSize: 10, color: C.textSec, letterSpacing: '.12em' }}>RADAR: CLIENTE_001</span>
-                <span style={{ fontSize: 10, color: C.green, fontWeight: 700, letterSpacing: '.08em' }}>● ACTIVO</span>
+                <span style={{ fontSize: 10, color: C.green, fontWeight: 700, letterSpacing: '.08em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{
+                    width: 7, height: 7, borderRadius: '50%', background: C.green,
+                    boxShadow: '0 0 0 0 rgba(34,197,94,0.7)', animation: 'pulse-status 2.2s ease-in-out infinite',
+                  }} />
+                  ACTIVO
+                </span>
               </div>
 
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 6 }}>Procesos compatibles detectados</div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-                  <span style={{ fontSize: 40, fontWeight: 800, letterSpacing: '-1px' }}>186</span>
-                  <svg width="60" height="28" viewBox="0 0 60 28" fill="none">
-                    <path d="M2 24 L12 18 L22 22 L32 10 L42 14 L52 4 L58 2" stroke={C.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-                <div style={{ height: 4, background: C.border, borderRadius: 2, marginTop: 12, overflow: 'hidden' }}>
-                  <div style={{ width: '78%', height: '100%', background: `linear-gradient(90deg, ${C.orange}, #fb923c)` }} />
+              {/* central metric */}
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 8 }}>Procesos compatibles detectados</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ fontSize: 44, fontWeight: 800, letterSpacing: '-1.5px' }}>{Math.round(countProcesos)}</span>
+                  <span style={{ fontSize: 12, color: C.green, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+                    +12% este mes
+                  </span>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
-                  <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.08em', marginBottom: 4 }}>SCORE PROMEDIO</div>
-                  <div style={{ fontSize: 22, fontWeight: 800 }}>56.7</div>
+              {/* sparkline */}
+              <svg width="100%" height="90" viewBox="0 0 320 90" fill="none" style={{ overflow: 'visible', display: 'block', marginBottom: 18 }}>
+                <defs>
+                  <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#ff7a20" stopOpacity="0.5"/>
+                    <stop offset="60%" stopColor="#ff7a20" stopOpacity="0.1"/>
+                    <stop offset="100%" stopColor="#ff7a20" stopOpacity="0"/>
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M4 70 C 40 70, 60 55, 90 48 C 120 41, 150 35, 180 28 C 210 21, 240 18, 270 12 C 290 9, 305 6, 316 4 L 316 90 L 4 90 Z"
+                  fill="url(#sparkGrad)"
+                  className="spark-area"
+                />
+                <path
+                  d="M4 70 C 40 70, 60 55, 90 48 C 120 41, 150 35, 180 28 C 210 21, 240 18, 270 12 C 290 9, 305 6, 316 4"
+                  stroke="#ff7a20"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                  className="spark-line"
+                />
+                <circle cx="316" cy="4" r="5" fill="#fff" stroke="#ff7a20" strokeWidth="2.5" className="spark-dot" />
+              </svg>
+
+              {/* secondary metrics */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+                <div style={{ background: 'rgba(10,13,20,0.5)', border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+                  <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.08em', marginBottom: 6 }}>SCORE PROMEDIO</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                    <div style={{ fontSize: 22, fontWeight: 800 }}>{countScore.toFixed(1)}</div>
+                    <div style={{ fontSize: 10, color: C.green, fontWeight: 700 }}>+2.4%</div>
+                  </div>
                 </div>
-                <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
-                  <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.08em', marginBottom: 4 }}>ACTUALIZACIÓN</div>
-                  <div style={{ fontSize: 22, fontWeight: 800 }}>4h</div>
+                <div style={{ background: 'rgba(10,13,20,0.5)', border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+                  <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.08em', marginBottom: 6 }}>ACTUALIZACIÓN</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                    <div style={{ fontSize: 22, fontWeight: 800 }}>{Math.round(countHours)}h</div>
+                    <div style={{ fontSize: 9, color: C.green, fontWeight: 700, letterSpacing: '.04em', border: `1px solid ${C.green}`, borderRadius: 4, padding: '2px 6px' }}>REAL-TIME</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* alert banner */}
+              <div style={{ background: 'rgba(10,13,20,0.55)', border: `1px solid ${C.border}`, borderRadius: 6, padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: '50%', background: C.yellow,
+                  boxShadow: '0 0 0 0 rgba(245,158,11,0.7)', animation: 'pulse-status 2.2s ease-in-out infinite',
+                }} />
+                <div>
+                  <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.08em', marginBottom: 2 }}>ÚLTIMA ALERTA</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Nueva licitación de obra civil en Bogotá detectada</div>
                 </div>
               </div>
             </div>
@@ -353,10 +429,10 @@ export default function LandingPage() {
                   </div>
                 </div>
               ))}
-              <Link href="/dashboard" style={{
+              <Link href="/clientes/nuevo" style={{
                 display: 'block', width: '100%', marginTop: 16, padding: '10px', background: 'transparent', border: `1px solid ${C.border}`,
                 color: C.text, fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer', textAlign: 'center', textDecoration: 'none',
-              }}>VER DASHBOARD</Link>
+              }}>CONFIGURAR PERFIL</Link>
             </div>
 
             {/* Benchmarking */}
@@ -414,6 +490,41 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── MÓDULOS ── */}
+      <section id="modulos" style={{ padding: '100px 24px', borderTop: `1px solid ${C.border}` }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 56 }}>
+            <h2 style={{ fontSize: 'clamp(26px, 3vw, 34px)', fontWeight: 800, marginBottom: 12 }}>Todas las vistas del radar</h2>
+            <p style={{ color: C.textSec, fontSize: 15 }}>Navega entre los módulos para detectar, analizar y postularte a licitaciones.</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20 }}>
+            {[
+              { label: 'Dashboard', desc: 'Panel de control y seguimiento', href: '/dashboard', icon: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z' },
+              { label: 'Procesos', desc: 'Lista de procesos compatibles', href: '/procesos/CO1.REQ.10494100', icon: 'M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z M3 6h18 M16 10a4 4 0 0 1-8 0' },
+              { label: 'Pre-selección', desc: 'Checklist y comparación de docs', href: '/preseleccion', icon: 'M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11' },
+              { label: 'Pliegos', desc: 'Análisis de requisitos', href: '/pliego', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8' },
+              { label: 'Calculadoras', desc: 'AIU y herramientas de precio', href: '/calculadoras', icon: 'M4 2h16a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z M8 6h8 M8 10h8 M8 14h5 M8 18h3' },
+              { label: 'Nuevo cliente', desc: 'Configurar perfil de empresa', href: '/clientes/nuevo', icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M16 7h6 M19 4v6' },
+            ].map((m, i) => (
+              <Link key={i} href={m.href} style={{
+                background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24,
+                textDecoration: 'none', color: C.text, transition: 'all 160ms',
+                display: 'flex', flexDirection: 'column', gap: 12,
+              }} onMouseEnter={e => { e.currentTarget.style.borderColor = C.orange; e.currentTarget.style.transform = 'translateY(-3px)' }} onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = 'none' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d={m.icon} />
+                </svg>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{m.label}</div>
+                  <div style={{ fontSize: 12, color: C.textSec, lineHeight: 1.5 }}>{m.desc}</div>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       </section>

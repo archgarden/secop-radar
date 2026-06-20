@@ -11,3 +11,6 @@ pdfplumber
 python-docx
 openpyxl
 pandas
+pytesseract
+pymupdf
+pillow

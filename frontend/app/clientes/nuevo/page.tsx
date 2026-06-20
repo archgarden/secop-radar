@@ -9,9 +9,13 @@ import BackgroundModePicker from '@/components/BackgroundModePicker'
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 const DEPARTAMENTOS = [
-  'CUNDINAMARCA', 'BOGOTÁ D.C.', 'ANTIOQUIA', 'VALLE DEL CAUCA',
-  'ATLÁNTICO', 'SANTANDER', 'BOLÍVAR', 'NARIÑO', 'CÓRDOBA',
-  'BOYACÁ', 'CAUCA', 'TOLIMA', 'META', 'HUILA', 'CASANARE',
+  'AMAZONAS', 'ANTIOQUIA', 'ARAUCA', 'ATLÁNTICO', 'BOGOTÁ D.C.',
+  'BOLÍVAR', 'BOYACÁ', 'CALDAS', 'CAQUETÁ', 'CASANARE', 'CAUCA',
+  'CESAR', 'CHOCÓ', 'CÓRDOBA', 'CUNDINAMARCA', 'GUAINÍA',
+  'GUAVIARE', 'HUILA', 'LA GUAJIRA', 'MAGDALENA', 'META',
+  'NARIÑO', 'NORTE DE SANTANDER', 'PUTUMAYO', 'QUINDÍO',
+  'RISARALDA', 'SAN ANDRÉS', 'SANTANDER', 'SUCRE', 'TOLIMA',
+  'VALLE DEL CAUCA', 'VAUPÉS', 'VICHADA',
 ]
 
 const UNSPSC_OPCIONES = [
@@ -60,6 +64,7 @@ export default function NuevoCliente() {
   const [form, setForm] = useState({
     nombre: '',
     email: '',
+    municipio: '',
     presupuesto_min: '',
     presupuesto_max: '',
   })
@@ -133,6 +138,7 @@ export default function NuevoCliente() {
           presupuesto_min: parseInt(form.presupuesto_min) || 0,
           presupuesto_max: parseInt(form.presupuesto_max) || 0,
           departamentos,
+          municipio: form.municipio.trim() || null,
           unspsc_codes,
         }),
       })
@@ -150,6 +156,7 @@ export default function NuevoCliente() {
     nombre: form.nombre || 'Sin nombre',
     email: form.email || 'Sin email',
     departamentos,
+    municipio: form.municipio.trim(),
     unspsc: unspsc_codes,
     min: parseInt(form.presupuesto_min) || 0,
     max: parseInt(form.presupuesto_max) || 0,
@@ -291,6 +298,21 @@ export default function NuevoCliente() {
                     </div>
                   </div>
 
+                  <div style={{ marginBottom: 22 }}>
+                    <label style={{ display: 'block', color: 'var(--text-sec)', fontSize: 11, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Municipio de operación principal
+                    </label>
+                    <input
+                      style={inputStyle}
+                      value={form.municipio}
+                      onChange={e => setForm(p => ({ ...p, municipio: e.target.value }))}
+                      placeholder="Ej: Yopal, Florencia, Saravena"
+                    />
+                    <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 4 }}>
+                      Opcional. Úsalo para alertas más precisas cuando el proceso indique municipio.
+                    </div>
+                  </div>
+
                   <div>
                     <label style={{ display: 'block', color: 'var(--text-sec)', fontSize: 11, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                       Códigos UNSPSC
@@ -425,6 +447,7 @@ export default function NuevoCliente() {
                       <div><span style={{ color: 'var(--text-sec)' }}>Empresa:</span> <span style={{ color: 'var(--text)', fontWeight: 500 }}>{resumen.nombre}</span></div>
                       <div><span style={{ color: 'var(--text-sec)' }}>Alertas:</span> <span style={{ color: 'var(--text)' }}>{resumen.email}</span></div>
                       <div><span style={{ color: 'var(--text-sec)' }}>Departamentos:</span> <span style={{ color: 'var(--text)' }}>{resumen.departamentos.join(', ') || '—'}</span></div>
+                      <div><span style={{ color: 'var(--text-sec)' }}>Municipio:</span> <span style={{ color: 'var(--text)' }}>{resumen.municipio || '—'}</span></div>
                       <div><span style={{ color: 'var(--text-sec)' }}>UNSPSC:</span> <span style={{ color: 'var(--text)' }}>{resumen.unspsc.join(', ') || '—'}</span></div>
                       <div><span style={{ color: 'var(--text-sec)' }}>Presupuesto:</span> <span style={{ color: 'var(--orange)', fontWeight: 600 }}>{fmtCOP(resumen.min)} – {resumen.max ? fmtCOP(resumen.max) : 'Sin límite'}</span></div>
                     </div>
@@ -547,6 +570,10 @@ export default function NuevoCliente() {
                   ))}
                 </div>
               ) : null}
+            </ResumenFila>
+
+            <ResumenFila label="Municipio" vacio="No especificado">
+              {resumen.municipio ? <span style={{ fontSize: 12, color: 'var(--text)' }}>{resumen.municipio}</span> : null}
             </ResumenFila>
 
             <ResumenFila label="Códigos UNSPSC" vacio="Ninguno añadido">

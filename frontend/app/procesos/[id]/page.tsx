@@ -255,7 +255,7 @@ export default function ProcesosCliente() {
                       </Link>
                     </td>
                     <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
                         <Link
                           href={`/preseleccion?cliente_id=${clienteId}&proceso_id=${p.id}`}
                           style={{
@@ -266,6 +266,21 @@ export default function ProcesosCliente() {
                             borderRadius: 3,
                             textDecoration: 'none',
                             fontWeight: 600,
+                          }}
+                        >
+                          Postularse
+                        </Link>
+                        <Link
+                          href={`/preseleccion?cliente_id=${clienteId}&proceso_id=${p.id}`}
+                          style={{
+                            background: 'var(--surface)',
+                            color: 'var(--text)',
+                            fontSize: 12,
+                            padding: '4px 10px',
+                            borderRadius: 3,
+                            textDecoration: 'none',
+                            fontWeight: 600,
+                            border: '1px solid var(--border)',
                           }}
                         >
                           Pre-seleccionar

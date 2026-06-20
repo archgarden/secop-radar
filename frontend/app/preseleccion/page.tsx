@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import StepIndicator from '@/components/StepIndicator'
+import ClientProfilePanel from '@/components/ClientProfilePanel'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -30,6 +32,7 @@ interface AnalisisDetalle {
   cliente: {
     nombre: string
     departamentos: string[]
+    municipio: string | null
     unspsc_codes: string[]
     presupuesto_min: number
     presupuesto_max: number
@@ -70,9 +73,18 @@ function PreseleccionContent() {
   const clienteId = searchParams.get('cliente_id')
   const procesoId = searchParams.get('proceso_id')
 
+  const router = useRouter()
   const [analisis, setAnalisis] = useState<Analisis | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [postulado, setPostulado] = useState(false)
+
+  useEffect(() => {
+    if (postulado) {
+      const t = setTimeout(() => router.push('/dashboard'), 2500)
+      return () => clearTimeout(t)
+    }
+  }, [postulado, router])
 
   useEffect(() => {
     if (!clienteId || !procesoId) {
@@ -114,6 +126,8 @@ function PreseleccionContent() {
       </nav>
 
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px', position: 'relative', zIndex: 1 }}>
+        <StepIndicator clienteId={clienteId || ''} procesoId={procesoId || ''} current={2} />
+
         {loading ? (
           <div style={{ color: 'var(--text-sec)', textAlign: 'center', padding: 48 }}>Analizando proceso...</div>
         ) : error ? (
@@ -188,6 +202,12 @@ function PreseleccionContent() {
                 <Info label="Objeto" value={analisis.detalle.proceso.objeto || '—'} />
               </div>
             </div>
+
+            {clienteId && (
+              <div style={{ marginBottom: 24 }}>
+                <ClientProfilePanel clienteId={Number(clienteId)} />
+              </div>
+            )}
 
             <div style={{
               background: 'var(--surface)',
@@ -279,40 +299,101 @@ function PreseleccionContent() {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 12 }}>
-              <Link
-                href={`/clientes/${clienteId}/documentos`}
-                style={{
-                  background: 'var(--orange)',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '10px 22px',
-                  borderRadius: 6,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-              >
-                Subir documentos
-              </Link>
-              {analisis.detalle.proceso.url_documento && (
-                <a
-                  href={typeof analisis.detalle.proceso.url_documento === 'string' && analisis.detalle.proceso.url_documento.startsWith('http')
-                    ? analisis.detalle.proceso.url_documento
-                    : '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    border: '1px solid var(--border)',
-                    color: 'var(--text)',
-                    padding: '10px 22px',
-                    borderRadius: 6,
-                    fontSize: 14,
-                    textDecoration: 'none',
-                  }}
-                >
-                  Ver pliego en SECOP
-                </a>
+            {/* Documentos: comparación requeridos vs subidos */}
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: 24,
+              marginBottom: 24,
+            }}>
+              <div style={{ fontSize: 12, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 16 }}>
+                Comparación de documentos
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+                <DocStat label="Requeridos" value={analisis.detalle.documentos_requeridos.length} color="var(--text)" />
+                <DocStat label="Subidos" value={analisis.detalle.documentos_subidos.length} color="var(--green)" />
+                <DocStat label="Faltantes" value={analisis.detalle.documentos_faltantes.length} color={analisis.detalle.documentos_faltantes.length > 0 ? 'var(--red)' : 'var(--green)'} />
+              </div>
+              {analisis.detalle.documentos_faltantes.length > 0 && (
+                <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 6, padding: 12, marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600, marginBottom: 6 }}>Documentos faltantes para postularse:</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--text)', fontSize: 12 }}>
+                    {analisis.detalle.documentos_faltantes.map((f, i) => <li key={i} style={{ marginBottom: 3 }}>{f}</li>)}
+                  </ul>
+                </div>
+              )}
+              {!postulado ? (
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setPostulado(true)}
+                    disabled={analisis.detalle.documentos_faltantes.length > 0 || analisis.recomendacion !== 'Participar'}
+                    style={{
+                      background: analisis.detalle.documentos_faltantes.length > 0 || analisis.recomendacion !== 'Participar' ? 'var(--border)' : 'var(--green)',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '10px 22px',
+                      borderRadius: 6,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: analisis.detalle.documentos_faltantes.length > 0 || analisis.recomendacion !== 'Participar' ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Postularse ahora
+                  </button>
+                  <Link
+                    href={`/clientes/${clienteId}/documentos`}
+                    style={{
+                      background: 'var(--orange)',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '10px 22px',
+                      borderRadius: 6,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Subir documentos
+                  </Link>
+                  {analisis.detalle.proceso.url_documento && (
+                    <a
+                      href={typeof analisis.detalle.proceso.url_documento === 'string' && analisis.detalle.proceso.url_documento.startsWith('http')
+                        ? analisis.detalle.proceso.url_documento
+                        : '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        border: '1px solid var(--border)',
+                        color: 'var(--text)',
+                        padding: '10px 22px',
+                        borderRadius: 6,
+                        fontSize: 14,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      Ver pliego en SECOP
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid var(--green)', borderRadius: 6, padding: 16 }}>
+                  <div style={{ fontSize: 14, color: 'var(--green)', fontWeight: 700, marginBottom: 4 }}>✓ Postulación confirmada</div>
+                  <div style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.5, marginBottom: 12 }}>
+                    Has iniciado el proceso de postulación para <strong>{analisis.detalle.proceso.entidad}</strong>. Revisa tu correo para los siguientes pasos y mantén tus documentos actualizados.
+                  </div>
+                  <Link
+                    href="/dashboard"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      background: 'var(--green)', color: '#fff',
+                      padding: '8px 16px', borderRadius: 4,
+                      fontSize: 13, fontWeight: 600, textDecoration: 'none',
+                    }}
+                  >
+                    Ir al dashboard →
+                  </Link>
+                </div>
               )}
             </div>
           </>
@@ -327,6 +408,15 @@ function Info({ label, value }: { label: string; value: string }) {
     <div>
       <div style={{ fontSize: 11, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
       <div style={{ color: 'var(--text)', fontWeight: 500 }}>{value}</div>
+    </div>
+  )
+}
+
+function DocStat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 14, textAlign: 'center' }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
+      <div style={{ fontSize: 10, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
     </div>
   )
 }

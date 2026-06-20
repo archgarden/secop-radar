@@ -17,6 +17,7 @@ from preseleccion import analizar_preseleccion
 from notificaciones import enviar_alerta_nuevos_procesos
 from radar import consultar_contratos_similares, correr_radar
 from analizador_pliego import analizar_pliego
+from extraccion.procesador import procesar_documento, consolidar_perfil
 from calculadoras import (
     calcular_capacidad_financiera,
     calcular_capacidad_residual,
@@ -96,6 +97,7 @@ class ClienteCreate(BaseModel):
     nombre: str
     email: str
     departamentos: list[str] = []
+    municipio: str | None = None
     unspsc_codes: list[str] = []
     presupuesto_min: int = 0
     presupuesto_max: int = 0
@@ -106,6 +108,7 @@ class ClienteOut(BaseModel):
     nombre: str
     email: str
     departamentos: str
+    municipio: str | None
     unspsc_codes: str
     presupuesto_min: int
     presupuesto_max: int
@@ -164,6 +167,7 @@ def crear_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
         nombre=payload.nombre,
         email=payload.email,
         departamentos=json.dumps(payload.departamentos),
+        municipio=payload.municipio,
         unspsc_codes=json.dumps(payload.unspsc_codes),
         presupuesto_min=payload.presupuesto_min,
         presupuesto_max=payload.presupuesto_max,
@@ -314,6 +318,7 @@ class DocumentoOut(BaseModel):
     nombre: str
     filename: str
     estado: str
+    extraccion: dict | None = None
     fecha_subida: str
 
     class Config:
@@ -325,9 +330,17 @@ def listar_documentos(cliente_id: int, db: Session = Depends(get_db)):
     cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    import json
+
     docs = db.query(Documento).filter(Documento.cliente_id == cliente_id).all()
     resultado = []
     for d in docs:
+        extraccion = None
+        if d.extraccion:
+            try:
+                extraccion = json.loads(d.extraccion)
+            except json.JSONDecodeError:
+                extraccion = None
         resultado.append(
             DocumentoOut(
                 id=d.id,
@@ -335,6 +348,7 @@ def listar_documentos(cliente_id: int, db: Session = Depends(get_db)):
                 nombre=d.nombre,
                 filename=d.filename,
                 estado=d.estado,
+                extraccion=extraccion,
                 fecha_subida=d.fecha_subida.isoformat(),
             )
         )
@@ -381,12 +395,28 @@ def subir_documento(
     db.commit()
     db.refresh(doc)
 
+    # Extraer información del documento de forma asíncrona al upload.
+    try:
+        procesar_documento(doc, db)
+    except Exception as exc:
+        logger.exception("Error extrayendo información del documento %s: %s", doc.id, exc)
+
+    import json
+
+    extraccion = None
+    if doc.extraccion:
+        try:
+            extraccion = json.loads(doc.extraccion)
+        except json.JSONDecodeError:
+            extraccion = None
+
     return DocumentoOut(
         id=doc.id,
         cliente_id=doc.cliente_id,
         nombre=doc.nombre,
         filename=doc.filename,
         estado=doc.estado,
+        extraccion=extraccion,
         fecha_subida=doc.fecha_subida.isoformat(),
     )
 
@@ -403,6 +433,14 @@ def eliminar_documento(documento_id: int, db: Session = Depends(get_db)):
     db.delete(doc)
     db.commit()
     return {"ok": True}
+
+
+@app.get("/clientes/{cliente_id}/perfil")
+def perfil_cliente(cliente_id: int, db: Session = Depends(get_db)):
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    return consolidar_perfil(cliente_id, db)
 
 
 SMMLV = int(os.getenv("SMMLV", "1423500"))

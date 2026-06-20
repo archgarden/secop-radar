@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
+import ClientProfilePanel from '@/components/ClientProfilePanel'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -11,6 +12,7 @@ interface ClienteApi {
   nombre: string
   email: string
   departamentos: string
+  municipio: string | null
   unspsc_codes: string
   presupuesto_min: number
   presupuesto_max: number
@@ -504,7 +506,7 @@ function CountdownCell({ iso }: { iso: string }) {
 }
 
 /* ─── Card de proceso — alto impacto ─────── */
-function ProcesoCard({ p, onClick, active }: { p: ProcesoData; onClick: () => void; active: boolean }) {
+function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClick: () => void; active: boolean; clienteId?: number }) {
   const C = useTheme()
   const [hov, setHov] = useState(false)
   const diff = new Date(p.cierre).getTime() - Date.now()
@@ -629,12 +631,32 @@ function ProcesoCard({ p, onClick, active }: { p: ProcesoData; onClick: () => vo
           <span style={{ fontSize: 10, color: C.textSec, letterSpacing: '.04em', textTransform: 'uppercase' }}>Cierre:</span>
           <CountdownCell iso={p.cierre} />
         </div>
-        <div style={{
-          fontSize: 11, fontWeight: 600, color: hov || active ? C.orange : C.textSec,
-          transition: 'color 180ms', letterSpacing: '.04em',
-        }}>
-          {active ? '● ACTIVO' : 'Ver análisis →'}
-        </div>
+        {active ? (
+          <div style={{
+            fontSize: 11, fontWeight: 600, color: C.orange,
+            transition: 'color 180ms', letterSpacing: '.04em',
+          }}>
+            ● ACTIVO
+          </div>
+        ) : clienteId ? (
+          <Link
+            href={`/procesos/resumen?cliente_id=${clienteId}&proceso_id=${p.id}`}
+            onClick={e => e.stopPropagation()}
+            style={{
+              fontSize: 11, fontWeight: 600, color: hov ? C.orangeH : C.orange,
+              transition: 'color 180ms', letterSpacing: '.04em', textDecoration: 'none',
+            }}
+          >
+            Ver análisis →
+          </Link>
+        ) : (
+          <div style={{
+            fontSize: 11, fontWeight: 600, color: hov ? C.orange : C.textSec,
+            transition: 'color 180ms', letterSpacing: '.04em',
+          }}>
+            Ver análisis →
+          </div>
+        )}
       </div>
     </div>
   )
@@ -720,6 +742,21 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
         <div style={{ fontSize: 12, color: C.textSec, lineHeight: 1.4, marginBottom: 8 }}>
           {proceso.entidad}
         </div>
+
+        {cliente && (
+          <Link
+            href={`/procesos/resumen?cliente_id=${cliente.id}&proceso_id=${proceso.id}`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'rgba(249,115,22,.12)', border: '1px solid rgba(249,115,22,.3)',
+              color: C.orange, fontSize: 11, fontWeight: 700,
+              padding: '6px 12px', borderRadius: 4, textDecoration: 'none',
+              marginBottom: 12, letterSpacing: '.03em',
+            }}
+          >
+            Abrir análisis completo →
+          </Link>
+        )}
 
         {/* Countdown prominente */}
         <div style={{
@@ -1281,33 +1318,24 @@ export default function Dashboard() {
             </div>
 
             {/* ─ Cliente activo ─ */}
-            <div style={{ position: 'relative', zIndex: 1, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 14, background: `${C.card}aa`, backdropFilter: 'blur(6px)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px' }}>
-              <div style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(249,115,22,.18)', border: `1px solid rgba(249,115,22,.3)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: C.orange }}>{cliente ? cliente.nombre.charAt(0) : '?'}</span>
-              </div>
+            <div style={{ position: 'relative', zIndex: 1, marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 14 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 3 }}>{cliente ? cliente.nombre : 'Cargando cliente...'}</div>
-                {cliente && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                    {parseCliente(cliente).departamentos.map(d => (
-                      <span key={d} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(34,197,94,.15)', color: C.green, fontWeight: 500 }}>
-                        {d}
-                      </span>
-                    ))}
-                    {parseCliente(cliente).unspsc_codes.map(u => (
-                      <span key={u} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(59,130,246,.15)', color: '#3b82f6', fontWeight: 500 }}>
-                        {labelUNSPSC(u.slice(0, 4))}
-                      </span>
-                    ))}
-                    <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(249,115,22,.15)', color: C.orange, fontWeight: 500 }}>
-                      ${(cliente.presupuesto_min / 1_000_000).toFixed(0)}M – ${(cliente.presupuesto_max / 1_000_000_000).toFixed(1)}B
-                    </span>
+                {cliente ? (
+                  <ClientProfilePanel clienteId={cliente.id} compact />
+                ) : (
+                  <div style={{ background: `${C.card}aa`, backdropFilter: 'blur(6px)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px' }}>
+                    <div style={{ fontSize: 13, color: C.textSec }}>Cargando cliente...</div>
                   </div>
                 )}
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{
+                width: 120, flexShrink: 0, textAlign: 'right',
+                background: `${C.card}aa`, backdropFilter: 'blur(6px)',
+                border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px',
+              }}>
                 <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.08em', textTransform: 'uppercase' }}>Perfil activo</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.orange }}>{procesos.filter(p => (p.score || 0) >= 70).length} matches</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: C.orange, margin: '4px 0' }}>{procesos.filter(p => (p.score || 0) >= 70).length}</div>
+                <div style={{ fontSize: 10, color: C.textSec }}>matches</div>
               </div>
             </div>
 
@@ -1394,7 +1422,7 @@ export default function Dashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               {procesados.map((p, i) => (
                 <div key={p.id} className="row-enter" style={{ animationDelay: `${i * 60}ms` }}>
-                  <ProcesoCard p={p} active={activeId === p.id} onClick={() => setActiveId(p.id === activeId ? null : p.id)} />
+                  <ProcesoCard p={p} active={activeId === p.id} clienteId={cliente?.id} onClick={() => setActiveId(p.id === activeId ? null : p.id)} />
                 </div>
               ))}
             </div>

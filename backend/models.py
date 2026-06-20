@@ -22,6 +22,7 @@ class Cliente(Base):
     nombre = Column(String, nullable=False)
     email = Column(String, nullable=False)
     departamentos = Column(Text, nullable=False, default="[]")
+    municipio = Column(String, nullable=True)
     unspsc_codes = Column(Text, nullable=False, default="[]")
     presupuesto_min = Column(Integer, nullable=False, default=0)
     presupuesto_max = Column(Integer, nullable=False, default=0)
@@ -88,6 +89,7 @@ class Documento(Base):
     filename = Column(String, nullable=False)
     path = Column(String, nullable=False)
     estado = Column(String, nullable=False, default="pendiente")
+    extraccion = Column(Text, nullable=True)
     fecha_subida = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     cliente = relationship("Cliente", back_populates="documentos")

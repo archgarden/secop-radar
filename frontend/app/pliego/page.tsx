@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import StepIndicator from '@/components/StepIndicator'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -99,6 +100,8 @@ function PliegoContent() {
       </nav>
 
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px', position: 'relative', zIndex: 1 }}>
+        <StepIndicator clienteId={clienteId || ''} procesoId={procesoId || ''} current={3} />
+
         {loading ? (
           <div style={{ color: 'var(--text-sec)', textAlign: 'center', padding: 48 }}>Analizando pliego...</div>
         ) : error ? (
@@ -236,7 +239,22 @@ function PliegoContent() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Link
+                href={`/preseleccion?cliente_id=${clienteId}&proceso_id=${procesoId}`}
+                style={{
+                  background: 'var(--green)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '10px 22px',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                Continuar a postulación →
+              </Link>
               <Link
                 href={`/clientes/${clienteId}/documentos`}
                 style={{

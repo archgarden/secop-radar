@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from extraccion.procesador import consolidar_perfil
 from models import AnalisisProceso, Cliente, Documento, Proceso
 
 SMMLV = 1_423_500  # Valor por defecto, se puede leer de env
@@ -57,8 +58,17 @@ def analizar_preseleccion(proceso_id: int, cliente_id: int, db: Session) -> Anal
     if not proceso or not cliente:
         raise ValueError("Proceso o cliente no encontrado")
 
-    deptos_cliente = _parse_json(cliente.departamentos)
-    unspsc_cliente = _parse_json(cliente.unspsc_codes)
+    perfil = consolidar_perfil(cliente.id, db)
+
+    # Preferir datos extraídos de documentos; si no existen, usar los registrados en el formulario.
+    deptos_cliente = (
+        perfil.get("departamentos")
+        or _parse_json(cliente.departamentos)
+    )
+    unspsc_cliente = (
+        perfil.get("unspsc")
+        or _parse_json(cliente.unspsc_codes)
+    )
 
     depto_proceso = (proceso.departamento or "").upper()
     unspsc_proceso = (proceso.unspsc_code or "").replace("V1.", "").upper()
@@ -129,6 +139,7 @@ def analizar_preseleccion(proceso_id: int, cliente_id: int, db: Session) -> Anal
         "cliente": {
             "nombre": cliente.nombre,
             "departamentos": deptos_cliente,
+            "municipio": cliente.municipio,
             "unspsc_codes": unspsc_cliente,
             "presupuesto_min": cliente.presupuesto_min,
             "presupuesto_max": cliente.presupuesto_max,

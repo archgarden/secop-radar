@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import StepIndicator from '@/components/StepIndicator'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -19,6 +20,19 @@ interface Proceso {
   score_match: number
   fecha_cierre: string | null
   fecha_publicacion: string | null
+}
+
+interface Contrato {
+  nombre_entidad: string
+  proveedor_adjudicado: string
+  valor_del_contrato: string | number
+  codigo_de_categoria_principal: string
+  descripcion_del_proceso: string
+  modalidad_de_contratacion: string
+  estado_contrato: string
+  fecha_de_firma: string
+  departamento: string
+  urlproceso: string | { url?: string } | null
 }
 
 function fmtCOP(n: number) {
@@ -47,6 +61,7 @@ function ResumenContent() {
 
   const [proceso, setProceso] = useState<Proceso | null>(null)
   const [modalidad, setModalidad] = useState<{ modalidad: string; descripcion: string } | null>(null)
+  const [contratos, setContratos] = useState<Contrato[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -57,13 +72,19 @@ function ResumenContent() {
       return
     }
 
-    fetch(`${API}/procesos/${procesoId}`)
-      .then(async r => {
+    Promise.all([
+      fetch(`${API}/procesos/${procesoId}`).then(async r => {
         if (!r.ok) throw new Error(await r.text())
         return r.json()
-      })
-      .then((data: Proceso) => {
+      }),
+      fetch(`${API}/clientes/${clienteId}/contratos-similares`).then(async r => {
+        if (!r.ok) throw new Error(await r.text())
+        return r.json()
+      }),
+    ])
+      .then(([data, contratosApi]: [Proceso, Contrato[]]) => {
         setProceso(data)
+        setContratos(contratosApi)
         if (data.presupuesto > 0) {
           fetch(`${API}/modalidad/recomendada/${data.presupuesto}`)
             .then(r => r.json())
@@ -103,6 +124,8 @@ function ResumenContent() {
       </nav>
 
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px', position: 'relative', zIndex: 1 }}>
+        <StepIndicator clienteId={clienteId || ''} procesoId={procesoId || ''} current={1} />
+
         {loading ? (
           <div style={{ color: 'var(--text-sec)', textAlign: 'center', padding: 48 }}>Cargando proceso...</div>
         ) : error ? (
@@ -204,7 +227,111 @@ function ResumenContent() {
               </div>
             </div>
 
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: 24,
+              marginBottom: 24,
+            }}>
+              <div style={{ fontSize: 12, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 16 }}>
+                Datos para buscar contratos similares en SECOP II
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 13, marginBottom: 16 }}>
+                <Info label="Código UNSPSC principal" value={proceso.unspsc_code || '—'} />
+                <Info label="Entidad" value={proceso.entidad} />
+                <Info label="Departamento" value={proceso.departamento || '—'} />
+                <Info label="Modalidad estimada" value={modalidad?.modalidad || '—'} />
+                <Info label="Rango de valor referencia" value={`${fmtCOP(proceso.presupuesto * 0.8)} – ${fmtCOP(proceso.presupuesto * 1.2)}`} />
+                <Info label="Dataset SECOP II" value="Contratos agregados" />
+              </div>
+              <a
+                href="https://www.datos.gov.co/Gastos-Gubernamentales/SECOP-II-Contratos-Agregados/jbjy-vk9h"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.3)',
+                  color: 'var(--blue)', fontSize: 12, fontWeight: 600,
+                  padding: '8px 14px', borderRadius: 5, textDecoration: 'none',
+                }}
+              >
+                Buscar contratos históricos en SECOP II ↗
+              </a>
+            </div>
+
+            {contratos.length > 0 && (
+              <div style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: 24,
+                marginBottom: 24,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Contratos similares adjudicados
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>{contratos.length} encontrados</div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {contratos.slice(0, 10).map((c, i) => (
+                    <div key={i} style={{
+                      background: 'var(--bg)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      padding: '12px 14px',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 4 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
+                            {(c.proveedor_adjudicado || 'Sin adjudicatario').length > 45 ? `${(c.proveedor_adjudicado || '').slice(0, 43)}…` : (c.proveedor_adjudicado || 'Sin adjudicatario')}
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text-sec)' }}>{c.nombre_entidad} · {c.fecha_de_firma ? c.fecha_de_firma.slice(0, 10) : '—'}</div>
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--orange)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                          {fmtCOP(Number(c.valor_del_contrato) || 0)}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 3, background: 'rgba(245,158,11,.12)', color: 'var(--yellow)', fontWeight: 600 }}>
+                          {c.modalidad_de_contratacion || '—'}
+                        </span>
+                        <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 3, background: 'rgba(59,130,246,.12)', color: 'var(--blue)', fontWeight: 600 }}>
+                          {c.codigo_de_categoria_principal || '—'}
+                        </span>
+                        {c.urlproceso && (
+                          <a
+                            href={typeof c.urlproceso === 'string' ? c.urlproceso : c.urlproceso?.url || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: 10, color: 'var(--blue)', textDecoration: 'none', fontWeight: 500 }}
+                          >
+                            Ver proceso ↗
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Link
+                href="/dashboard"
+                style={{
+                  background: 'var(--orange)',
+                  color: '#fff',
+                  padding: '10px 22px',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                Dashboard
+              </Link>
               <Link
                 href={`/procesos/${clienteId}`}
                 style={{
