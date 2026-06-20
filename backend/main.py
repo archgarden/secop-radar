@@ -121,12 +121,21 @@ class ClienteOut(BaseModel):
 class ProcesoOut(BaseModel):
     id: int
     numero_proceso: str
+    referencia_proceso: str | None
+    titulo: str | None
     entidad: str
     objeto: str
     presupuesto: int
     departamento: str | None
     unspsc_code: str | None
     url_documento: str | None
+    estado_proceso: str | None
+    modalidad: str | None
+    fase: str | None
+    tipo_contrato: str | None
+    subtipo_contrato: str | None
+    duracion: int | None
+    unidad_duracion: str | None
     tiene_adenda: bool
     score_match: int
     fecha_cierre: str | None
@@ -145,6 +154,32 @@ class LogOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+def _proceso_to_out(proceso: Proceso, score: int = 0) -> ProcesoOut:
+    return ProcesoOut(
+        id=proceso.id,
+        numero_proceso=proceso.numero_proceso,
+        referencia_proceso=proceso.referencia_proceso,
+        titulo=proceso.titulo,
+        entidad=proceso.entidad,
+        objeto=proceso.objeto,
+        presupuesto=proceso.presupuesto,
+        departamento=proceso.departamento,
+        unspsc_code=proceso.unspsc_code,
+        url_documento=proceso.url_documento,
+        estado_proceso=proceso.estado_proceso,
+        modalidad=proceso.modalidad,
+        fase=proceso.fase,
+        tipo_contrato=proceso.tipo_contrato,
+        subtipo_contrato=proceso.subtipo_contrato,
+        duracion=proceso.duracion,
+        unidad_duracion=proceso.unidad_duracion,
+        tiene_adenda=proceso.tiene_adenda,
+        score_match=score,
+        fecha_cierre=proceso.fecha_cierre.isoformat() if proceso.fecha_cierre else None,
+        fecha_publicacion=proceso.fecha_publicacion.isoformat() if proceso.fecha_publicacion else None,
+    )
 
 
 # ---------- Rutas ----------
@@ -205,22 +240,7 @@ def procesos_cliente(cliente_id: int, db: Session = Depends(get_db)):
 
     resultado = []
     for proceso, score in rows:
-        resultado.append(
-            ProcesoOut(
-                id=proceso.id,
-                numero_proceso=proceso.numero_proceso,
-                entidad=proceso.entidad,
-                objeto=proceso.objeto,
-                presupuesto=proceso.presupuesto,
-                departamento=proceso.departamento,
-                unspsc_code=proceso.unspsc_code,
-                url_documento=proceso.url_documento,
-                tiene_adenda=proceso.tiene_adenda,
-                score_match=score,
-                fecha_cierre=proceso.fecha_cierre.isoformat() if proceso.fecha_cierre else None,
-                fecha_publicacion=proceso.fecha_publicacion.isoformat() if proceso.fecha_publicacion else None,
-            )
-        )
+        resultado.append(_proceso_to_out(proceso, score))
     return resultado
 
 
@@ -229,20 +249,7 @@ def obtener_proceso(proceso_id: int, db: Session = Depends(get_db)):
     proceso = db.query(Proceso).filter(Proceso.id == proceso_id).first()
     if not proceso:
         raise HTTPException(status_code=404, detail="Proceso no encontrado")
-    return ProcesoOut(
-        id=proceso.id,
-        numero_proceso=proceso.numero_proceso,
-        entidad=proceso.entidad,
-        objeto=proceso.objeto,
-        presupuesto=proceso.presupuesto,
-        departamento=proceso.departamento,
-        unspsc_code=proceso.unspsc_code,
-        url_documento=proceso.url_documento,
-        tiene_adenda=proceso.tiene_adenda,
-        score_match=0,
-        fecha_cierre=proceso.fecha_cierre.isoformat() if proceso.fecha_cierre else None,
-        fecha_publicacion=proceso.fecha_publicacion.isoformat() if proceso.fecha_publicacion else None,
-    )
+    return _proceso_to_out(proceso, 0)
 
 
 @app.post("/radar/correr/{cliente_id}")

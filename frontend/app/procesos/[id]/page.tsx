@@ -9,14 +9,18 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 interface Proceso {
   id: number
   numero_proceso: string
+  referencia_proceso: string | null
   entidad: string
   objeto: string
   presupuesto: number
   departamento: string | null
   unspsc_code: string | null
   url_documento: string | null
+  estado_proceso: string | null
+  modalidad: string | null
   tiene_adenda: boolean
   score_match: number
+  fecha_cierre: string | null
 }
 
 function scoreColor(s: number) {
@@ -27,6 +31,15 @@ function scoreColor(s: number) {
 
 function fmt(n: number) {
   return '$' + n.toLocaleString('es-CO')
+}
+
+function esUrlSecopDirecta(url: string | null): boolean {
+  return !!url && url.includes('OpportunityDetail')
+}
+
+function construirUrlSecop(proceso: Proceso): string {
+  if (esUrlSecopDirecta(proceso.url_documento)) return proceso.url_documento!
+  return `https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?id=${encodeURIComponent(proceso.numero_proceso)}`
 }
 
 export default function ProcesosCliente() {
@@ -176,9 +189,12 @@ export default function ProcesosCliente() {
                 }}>
                   <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>Score</th>
                   <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>Entidad</th>
+                  <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>ID / Referencia SECOP II</th>
                   <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>Objeto</th>
                   <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>Depto</th>
+                  <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>Estado</th>
                   <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 500 }}>Presupuesto</th>
+                  <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Cierre</th>
                   <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Flags</th>
                   <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Pliego</th>
                   <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Acción</th>
@@ -207,7 +223,12 @@ export default function ProcesosCliente() {
                     </td>
                     <td style={{ padding: '10px 14px', color: 'var(--text)', maxWidth: 200 }}>
                       <div style={{ fontWeight: 500 }}>{p.entidad}</div>
-                      <div style={{ color: 'var(--text-sec)', fontSize: 11, marginTop: 2 }}>{p.numero_proceso}</div>
+                    </td>
+                    <td style={{ padding: '10px 14px', color: 'var(--text-sec)', fontSize: 12, maxWidth: 180 }}>
+                      <div style={{ fontFamily: 'monospace', color: 'var(--text)' }}>{p.numero_proceso}</div>
+                      {p.referencia_proceso && (
+                        <div style={{ fontSize: 11, marginTop: 2 }}>Ref: {p.referencia_proceso}</div>
+                      )}
                     </td>
                     <td style={{ padding: '10px 14px', color: 'var(--text-sec)', maxWidth: 280 }}>
                       <div style={{
@@ -223,8 +244,14 @@ export default function ProcesosCliente() {
                     <td style={{ padding: '10px 14px', color: 'var(--text-sec)', fontSize: 12, whiteSpace: 'nowrap' }}>
                       {p.departamento || '—'}
                     </td>
+                    <td style={{ padding: '10px 14px', color: 'var(--text-sec)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                      {p.estado_proceso || '—'}
+                    </td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       {p.presupuesto > 0 ? fmt(p.presupuesto) : '—'}
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'center', color: 'var(--text-sec)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                      {p.fecha_cierre ? new Date(p.fecha_cierre).toLocaleDateString('es-CO') : '—'}
                     </td>
                     <td style={{ padding: '10px 14px', textAlign: 'center' }}>
                       {p.tiene_adenda && (
@@ -300,6 +327,24 @@ export default function ProcesosCliente() {
                         >
                           Pliego
                         </Link>
+                        <a
+                          href={construirUrlSecop(p)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={esUrlSecopDirecta(p.url_documento) ? 'Abrir proceso en SECOP II' : 'Búsqueda en SECOP II (URL directa no disponible)'}
+                          style={{
+                            background: esUrlSecopDirecta(p.url_documento) ? 'rgba(59,130,246,.12)' : 'var(--surface)',
+                            color: 'var(--blue)',
+                            fontSize: 12,
+                            padding: '4px 10px',
+                            borderRadius: 3,
+                            textDecoration: 'none',
+                            fontWeight: 600,
+                            border: '1px solid var(--border)',
+                          }}
+                        >
+                          {esUrlSecopDirecta(p.url_documento) ? 'SECOP II ↗' : 'Buscar ↗'}
+                        </a>
                       </div>
                     </td>
                   </tr>

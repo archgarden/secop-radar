@@ -22,12 +22,15 @@ interface ClienteApi {
 interface ProcesoApi {
   id: number
   numero_proceso: string
+  referencia_proceso: string | null
   entidad: string
   objeto: string
   presupuesto: number
   departamento: string | null
   unspsc_code: string | null
   url_documento: string | null
+  estado_proceso: string | null
+  modalidad: string | null
   tiene_adenda: boolean
   score_match: number
   fecha_cierre?: string | null
@@ -88,6 +91,10 @@ function mapearProceso(p: ProcesoApi, cliente: ReturnType<typeof parseCliente>):
     id: p.id,
     entidad: p.entidad,
     idProceso: p.numero_proceso,
+    referenciaProceso: p.referencia_proceso,
+    urlSecop: p.url_documento,
+    estado: p.estado_proceso,
+    modalidad: p.modalidad,
     departamento: p.departamento || '—',
     unspsc: unspscPrefix,
     unspscLabel: labelUNSPSC(unspscPrefix),
@@ -96,6 +103,7 @@ function mapearProceso(p: ProcesoApi, cliente: ReturnType<typeof parseCliente>):
     objeto: p.objeto,
     presupuesto: p.presupuesto,
     cierre,
+    fechaPublicacion: p.fecha_publicacion,
     docs: 0,
     score,
     matchDepto,
@@ -128,6 +136,10 @@ interface ProcesoData {
   id: number
   entidad: string
   idProceso: string
+  referenciaProceso: string | null
+  urlSecop: string | null
+  estado: string | null
+  modalidad: string | null
   departamento: string
   unspsc: string
   unspscLabel: string
@@ -136,6 +148,7 @@ interface ProcesoData {
   objeto: string
   presupuesto: number
   cierre: string
+  fechaPublicacion: string | null | undefined
   docs: number
   // Calculados dinámicamente
   score?: number
@@ -225,6 +238,15 @@ function useClock() {
     tick(); const id = setInterval(tick, 1000); return () => clearInterval(id)
   }, [])
   return t
+}
+
+function esUrlSecopDirecta(url: string | null): boolean {
+  return !!url && url.includes('OpportunityDetail')
+}
+
+function construirUrlSecop(p: ProcesoData): string {
+  if (esUrlSecopDirecta(p.urlSecop)) return p.urlSecop!
+  return `https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?id=${encodeURIComponent(p.idProceso)}`
 }
 
 /* ─── Fondo: Circuito PCB ────────────────────── */
@@ -560,7 +582,10 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
               </div>
             )}
             <div style={{ fontWeight: 700, fontSize: 16, color: C.text, lineHeight: 1.2, marginBottom: 3 }}>{p.entidad}</div>
-            <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.04em' }}>ID: {p.idProceso}</div>
+            <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.04em', fontFamily: 'monospace' }}>ID: {p.idProceso}</div>
+            {p.referenciaProceso && (
+              <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.04em', marginTop: 2 }}>Ref: {p.referenciaProceso}</div>
+            )}
           </div>
           {/* Score ring grande */}
           <div style={{ textAlign: 'center', flexShrink: 0 }}>
@@ -618,6 +643,25 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
           fontSize: 12, color: C.textSec, lineHeight: 1.6, margin: '12px 0',
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         }}>{p.objeto}</p>
+
+        {/* Estado / modalidad / publicación */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+          {p.estado && (
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: p.estado === 'Publicado' ? C.green : C.textSec, border: `1px solid ${p.estado === 'Publicado' ? C.green : C.border}`, padding: '2px 7px', borderRadius: 3 }}>
+              {p.estado}
+            </span>
+          )}
+          {p.modalidad && (
+            <span style={{ fontSize: 9, color: C.textSec, border: `1px solid ${C.border}`, padding: '2px 7px', borderRadius: 3 }}>
+              {p.modalidad}
+            </span>
+          )}
+          {p.fechaPublicacion && (
+            <span style={{ fontSize: 9, color: C.textSec }}>
+              Publicado {new Date(p.fechaPublicacion).toLocaleDateString('es-CO')}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Footer */}
@@ -631,32 +675,48 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
           <span style={{ fontSize: 10, color: C.textSec, letterSpacing: '.04em', textTransform: 'uppercase' }}>Cierre:</span>
           <CountdownCell iso={p.cierre} />
         </div>
-        {active ? (
-          <div style={{
-            fontSize: 11, fontWeight: 600, color: C.orange,
-            transition: 'color 180ms', letterSpacing: '.04em',
-          }}>
-            ● ACTIVO
-          </div>
-        ) : clienteId ? (
-          <Link
-            href={`/procesos/resumen?cliente_id=${clienteId}&proceso_id=${p.id}`}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <a
+            href={construirUrlSecop(p)}
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
+            title={esUrlSecopDirecta(p.urlSecop) ? 'Abrir proceso en SECOP II' : 'Buscar en SECOP II'}
             style={{
-              fontSize: 11, fontWeight: 600, color: hov ? C.orangeH : C.orange,
-              transition: 'color 180ms', letterSpacing: '.04em', textDecoration: 'none',
+              fontSize: 10, fontWeight: 700,
+              color: esUrlSecopDirecta(p.urlSecop) ? '#3b82f6' : C.textSec,
+              textDecoration: 'none', letterSpacing: '.03em',
             }}
           >
-            Ver análisis →
-          </Link>
-        ) : (
-          <div style={{
-            fontSize: 11, fontWeight: 600, color: hov ? C.orange : C.textSec,
-            transition: 'color 180ms', letterSpacing: '.04em',
-          }}>
-            Ver análisis →
-          </div>
-        )}
+            {esUrlSecopDirecta(p.urlSecop) ? 'SECOP II ↗' : 'Buscar ↗'}
+          </a>
+          {active ? (
+            <div style={{
+              fontSize: 11, fontWeight: 600, color: C.orange,
+              transition: 'color 180ms', letterSpacing: '.04em',
+            }}>
+              ● ACTIVO
+            </div>
+          ) : clienteId ? (
+            <Link
+              href={`/procesos/resumen?cliente_id=${clienteId}&proceso_id=${p.id}`}
+              onClick={e => e.stopPropagation()}
+              style={{
+                fontSize: 11, fontWeight: 600, color: hov ? C.orangeH : C.orange,
+                transition: 'color 180ms', letterSpacing: '.04em', textDecoration: 'none',
+              }}
+            >
+              Ver análisis →
+            </Link>
+          ) : (
+            <div style={{
+              fontSize: 11, fontWeight: 600, color: hov ? C.orange : C.textSec,
+              transition: 'color 180ms', letterSpacing: '.04em',
+            }}>
+              Ver análisis →
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

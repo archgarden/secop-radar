@@ -10,12 +10,21 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 interface Proceso {
   id: number
   numero_proceso: string
+  referencia_proceso: string | null
+  titulo: string | null
   entidad: string
   objeto: string
   presupuesto: number
   departamento: string | null
   unspsc_code: string | null
   url_documento: string | null
+  estado_proceso: string | null
+  modalidad: string | null
+  fase: string | null
+  tipo_contrato: string | null
+  subtipo_contrato: string | null
+  duracion: number | null
+  unidad_duracion: string | null
   tiene_adenda: boolean
   score_match: number
   fecha_cierre: string | null
@@ -42,6 +51,15 @@ function fmtCOP(n: number) {
   return `$${n.toLocaleString('es-CO')}`
 }
 
+function esUrlSecopDirecta(url: string | null): boolean {
+  return !!url && url.includes('OpportunityDetail')
+}
+
+function construirUrlSecop(proceso: Proceso): string {
+  if (esUrlSecopDirecta(proceso.url_documento)) return proceso.url_documento!
+  return `https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?id=${encodeURIComponent(proceso.numero_proceso)}`
+}
+
 function duracionDias(inicio: string | null, fin: string | null) {
   if (!inicio || !fin) return null
   const diff = new Date(fin).getTime() - new Date(inicio).getTime()
@@ -52,6 +70,54 @@ function diasRestantes(fin: string | null) {
   if (!fin) return null
   const diff = new Date(fin).getTime() - Date.now()
   return Math.ceil(diff / 86400000)
+}
+
+function analizarObjeto(objeto: string) {
+  const texto = objeto.toLowerCase()
+
+  const actividades = [
+    'construcción', 'construccion', 'mantenimiento', 'rehabilitación', 'rehabilitacion',
+    'interventoría', 'interventoria', 'diseño', 'diseno', 'estudios', 'consultoría', 'consultoria',
+    'adecuación', 'adecuacion', 'remodelación', 'remodelacion', 'ampliación', 'ampliacion',
+    'demolición', 'demolicion', 'pavimentación', 'pavimentacion', 'señalización', 'señalizacion',
+    'drenaje', 'alcantarillado', 'acueducto', 'electricidad', 'pintura', 'cubierta',
+    'estructura', 'cimentación', 'cimentacion', 'vías', 'vias', 'puentes', 'edificación', 'edificacion',
+    'obra civil', 'obra pública', 'obra publica', 'locativo', 'suministro', 'instalación', 'instalacion',
+    'excavación', 'excavacion', 'relleno', 'compactación', 'compactacion', 'impermeabilización',
+    'impermeabilizacion', 'fontanería', 'fontaneria', 'iluminación', 'iluminacion'
+  ]
+
+  const materiales = [
+    'concreto', 'acero', 'asfalto', 'madera', 'ladrillo', 'cemento', 'tubería', 'tuberia',
+    'cable', 'pintura', 'arena', 'grava', 'hierro', 'aluminio', 'vidrio', 'cerámica', 'ceramica',
+    'pvc', 'pebd', 'geomembrana', 'geotextil', 'adoquín', 'adoquin', 'baldosa', 'malla',
+    'yeso', 'estuco', 'impermeabilizante', 'sellante'
+  ]
+
+  const entregables = [
+    'diseños', 'planos', 'informes', 'estudios', 'memorias', 'manuales', 'interventoría',
+    'interventoria', 'obra', 'servicios', 'asesoría', 'asesoria', 'acompañamiento', 'capacitación',
+    'capacitacion', 'formulación', 'formulacion', 'evaluación', 'evaluacion', 'diagnóstico', 'diagnostico'
+  ]
+
+  const encontrar = (lista: string[]) =>
+    Array.from(new Set(lista.filter(p => texto.includes(p)).map(p => p.replace(/ó/g, 'ó').replace(/í/g, 'í').replace(/é/g, 'é').replace(/á/g, 'á').replace(/ú/g, 'ú'))))
+
+  return {
+    actividades: encontrar(actividades),
+    materiales: encontrar(materiales),
+    entregables: encontrar(entregables),
+  }
+}
+
+function recomendacionPostulacion(proceso: Proceso, restantes: number | null): { texto: string; color: string } {
+  if (proceso.estado_proceso === 'Cancelado') return { texto: 'NO POSTULAR — Proceso cancelado', color: 'var(--red)' }
+  if (proceso.estado_proceso === 'Borrador') return { texto: 'OBSERVAR — Aún es borrador', color: '#f59e0b' }
+  if (restantes !== null && restantes < 0) return { texto: 'NO POSTULAR — Cierre vencido', color: 'var(--red)' }
+  if (restantes !== null && restantes <= 3) return { texto: 'URGENTE — Quedan pocos días para postular', color: '#f59e0b' }
+  if (proceso.estado_proceso === 'Publicado' || proceso.estado_proceso === 'Abierto') return { texto: 'POSTULAR — Proceso activo', color: 'var(--green)' }
+  if (proceso.estado_proceso === 'Evaluación' || proceso.estado_proceso === 'Seleccionado') return { texto: 'EVALUAR — Proceso en evaluación', color: '#f59e0b' }
+  return { texto: 'REVISAR — Verificar estado en SECOP II', color: 'var(--text-sec)' }
 }
 
 function ResumenContent() {
@@ -146,8 +212,36 @@ function ResumenContent() {
               padding: 24,
               marginBottom: 24,
             }}>
-              <div style={{ fontSize: 11, color: 'var(--text-sec)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 6 }}>
-                {proceso.numero_proceso}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-sec)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 6 }}>
+                    ID SECOP II
+                  </div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
+                    {proceso.numero_proceso}
+                  </div>
+                  {proceso.referencia_proceso && (
+                    <div style={{ fontSize: 12, color: 'var(--text-sec)' }}>
+                      Referencia: <span style={{ fontWeight: 600, color: 'var(--text)' }}>{proceso.referencia_proceso}</span>
+                    </div>
+                  )}
+                </div>
+                <a
+                  href={construirUrlSecop(proceso)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={esUrlSecopDirecta(proceso.url_documento) ? 'Abrir proceso en SECOP II' : 'Búsqueda en SECOP II (URL directa no disponible)'}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: esUrlSecopDirecta(proceso.url_documento) ? 'rgba(59,130,246,.12)' : 'var(--bg)',
+                    border: `1px solid ${esUrlSecopDirecta(proceso.url_documento) ? 'rgba(59,130,246,.3)' : 'var(--border)'}`,
+                    color: 'var(--blue)', fontSize: 12, fontWeight: 700,
+                    padding: '8px 14px', borderRadius: 5, textDecoration: 'none',
+                    letterSpacing: '.03em', flexShrink: 0,
+                  }}
+                >
+                  {esUrlSecopDirecta(proceso.url_documento) ? 'Ver en SECOP II ↗' : 'Buscar en SECOP II ↗'}
+                </a>
               </div>
               <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, lineHeight: 1.3 }}>
                 {proceso.entidad}
@@ -168,6 +262,10 @@ function ResumenContent() {
                 Información general
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 13 }}>
+                <Info label="ID SECOP II" value={proceso.numero_proceso} />
+                <Info label="Referencia del proceso" value={proceso.referencia_proceso || '—'} />
+                <Info label="Estado en SECOP II" value={proceso.estado_proceso || '—'} />
+                <Info label="Modalidad" value={proceso.modalidad || '—'} />
                 <Info label="Presupuesto oficial" value={fmtCOP(proceso.presupuesto)} />
                 <Info label="Modalidad recomendada" value={modalidad?.modalidad || '—'} sub={modalidad?.descripcion} />
                 <Info label="Departamento" value={proceso.departamento || '—'} />
@@ -235,47 +333,169 @@ function ResumenContent() {
               marginBottom: 24,
             }}>
               <div style={{ fontSize: 12, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 16 }}>
-                Datos para buscar contratos similares en SECOP II
+                Alcance y actividades del proceso
               </div>
+
+              <div style={{
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                padding: 16,
+                marginBottom: 16,
+              }}>
+                <div style={{ fontSize: 11, color: 'var(--text-sec)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+                  Objeto / Descripción completa
+                </div>
+                <p style={{ color: 'var(--text)', fontSize: 14, lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line' }}>
+                  {proceso.objeto}
+                </p>
+                {proceso.titulo && proceso.titulo !== proceso.objeto && (
+                  <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-sec)' }}>
+                    <span style={{ fontWeight: 600 }}>Nombre del procedimiento:</span> {proceso.titulo}
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 13, marginBottom: 16 }}>
-                <Info label="Código UNSPSC principal" value={proceso.unspsc_code || '—'} />
-                <Info label="Entidad" value={proceso.entidad} />
-                <Info label="Departamento" value={proceso.departamento || '—'} />
-                <Info label="Modalidad estimada" value={modalidad?.modalidad || '—'} />
-                <Info label="Rango de valor referencia" value={`${fmtCOP(proceso.presupuesto * 0.8)} – ${fmtCOP(proceso.presupuesto * 1.2)}`} />
-                <Info label="Dataset SECOP II" value="Contratos agregados" />
+                <Info label="Duración del contrato" value={proceso.duracion ? `${proceso.duracion} ${proceso.unidad_duracion || 'días'}` : '—'} />
+                <Info label="Fase actual" value={proceso.fase || '—'} />
+                <Info label="Tipo de contrato" value={proceso.tipo_contrato || '—'} />
+                <Info label="Subtipo" value={proceso.subtipo_contrato || '—'} />
+                <Info label="Modalidad" value={proceso.modalidad || '—'} />
+                <Info label="Estado" value={proceso.estado_proceso || '—'} />
               </div>
-              <a
-                href="https://www.datos.gov.co/Gastos-Gubernamentales/SECOP-II-Contratos-Agregados/jbjy-vk9h"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.3)',
-                  color: 'var(--blue)', fontSize: 12, fontWeight: 600,
-                  padding: '8px 14px', borderRadius: 5, textDecoration: 'none',
-                }}
-              >
-                Buscar contratos históricos en SECOP II ↗
-              </a>
+
+              {(() => {
+                const analisis = analizarObjeto(proceso.objeto)
+                return (
+                  <>
+                    {analisis.actividades.length > 0 && (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-sec)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+                          Actividades identificadas
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {analisis.actividades.map((a, i) => (
+                            <span key={i} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 3, background: 'rgba(59,130,246,.12)', color: '#3b82f6', fontWeight: 600 }}>
+                              {a}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {analisis.materiales.length > 0 && (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-sec)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+                          Materiales mencionados
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {analisis.materiales.map((m, i) => (
+                            <span key={i} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 3, background: 'rgba(34,197,94,.12)', color: 'var(--green)', fontWeight: 600 }}>
+                              {m}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {analisis.entregables.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, color: 'var(--text-sec)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+                          Entregables / productos esperados
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {analisis.entregables.map((e, i) => (
+                            <span key={i} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 3, background: 'rgba(245,158,11,.12)', color: 'var(--yellow)', fontWeight: 600 }}>
+                              {e}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
+
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: 24,
+              marginBottom: 24,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Decisión de postulación
+                </div>
+                {(() => {
+                  const rec = recomendacionPostulacion(proceso, restantes)
+                  return (
+                    <div style={{ fontSize: 13, fontWeight: 700, color: rec.color }}>
+                      {rec.texto}
+                    </div>
+                  )
+                })()}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <CheckItem
+                  ok={proceso.estado_proceso === 'Publicado' || proceso.estado_proceso === 'Abierto'}
+                  label="Proceso publicado/abierto"
+                  sub={proceso.estado_proceso || 'Sin estado'}
+                />
+                <CheckItem
+                  ok={restantes === null || restantes > 7}
+                  label="Tiempo suficiente para preparar oferta"
+                  sub={restantes !== null ? `${restantes} días restantes` : 'Sin fecha de cierre'}
+                />
+                <CheckItem
+                  ok={proceso.presupuesto > 0}
+                  label="Presupuesto definido"
+                  sub={proceso.presupuesto > 0 ? fmtCOP(proceso.presupuesto) : 'No definido'}
+                />
+                <CheckItem
+                  ok={!!proceso.duracion}
+                  label="Duración del contrato conocida"
+                  sub={proceso.duracion ? `${proceso.duracion} ${proceso.unidad_duracion || 'días'}` : 'No informada'}
+                />
+                <CheckItem
+                  ok={!proceso.tiene_adenda}
+                  label="Sin adendas pendientes"
+                  sub={proceso.tiene_adenda ? 'Tiene adenda' : 'Sin adenda'}
+                />
+                <CheckItem
+                  ok={esUrlSecopDirecta(proceso.url_documento)}
+                  label="URL directa disponible en SECOP II"
+                  sub={esUrlSecopDirecta(proceso.url_documento) ? 'Sí' : 'Buscar manualmente'}
+                />
+              </div>
             </div>
 
             {contratos.length > 0 && (
-              <div style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: 24,
-                marginBottom: 24,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Contratos similares adjudicados
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>{contratos.length} encontrados</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {contratos.slice(0, 10).map((c, i) => (
+              <details style={{ marginBottom: 24 }}>
+                <summary style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: '16px 24px',
+                  color: 'var(--text-sec)',
+                  fontSize: 12,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}>
+                  Contratos similares adjudicados ({contratos.length})
+                </summary>
+                <div style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderTop: 'none',
+                  borderRadius: '0 0 8px 8px',
+                  padding: 24,
+                  display: 'flex', flexDirection: 'column', gap: 8,
+                }}>
+                  {contratos.slice(0, 5).map((c, i) => (
                     <div key={i} style={{
                       background: 'var(--bg)',
                       border: '1px solid var(--border)',
@@ -300,21 +520,11 @@ function ResumenContent() {
                         <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 3, background: 'rgba(59,130,246,.12)', color: 'var(--blue)', fontWeight: 600 }}>
                           {c.codigo_de_categoria_principal || '—'}
                         </span>
-                        {c.urlproceso && (
-                          <a
-                            href={typeof c.urlproceso === 'string' ? c.urlproceso : c.urlproceso?.url || '#'}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ fontSize: 10, color: 'var(--blue)', textDecoration: 'none', fontWeight: 500 }}
-                          >
-                            Ver proceso ↗
-                          </a>
-                        )}
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
+              </details>
             )}
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -345,27 +555,52 @@ function ResumenContent() {
               >
                 ← Volver a procesos
               </Link>
-              {proceso.url_documento && (
-                <a
-                  href={proceso.url_documento.startsWith('http') ? proceso.url_documento : 'https://www.secop.gov.co/'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-sec)',
-                    padding: '10px 22px',
-                    borderRadius: 6,
-                    fontSize: 14,
-                    textDecoration: 'none',
-                  }}
-                >
-                  Ver en SECOP II ↗
-                </a>
-              )}
+              <a
+                href={construirUrlSecop(proceso)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-sec)',
+                  padding: '10px 22px',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                }}
+              >
+                {esUrlSecopDirecta(proceso.url_documento) ? 'Ver en SECOP II ↗' : 'Buscar en SECOP II ↗'}
+              </a>
             </div>
           </>
         ) : null}
       </main>
+    </div>
+  )
+}
+
+function CheckItem({ ok, label, sub }: { ok: boolean; label: string; sub?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'var(--bg)', borderRadius: 6, border: '1px solid var(--border)' }}>
+      <div style={{
+        width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+        background: ok ? 'rgba(34,197,94,.15)' : 'rgba(239,68,68,.1)',
+        border: `2px solid ${ok ? 'var(--green)' : 'var(--red)'}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {ok ? (
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+            <polyline points="2,6 5,9 10,3" stroke="var(--green)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        ) : (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="3" strokeLinecap="round">
+            <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>
+          </svg>
+        )}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{label}</div>
+        {sub && <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 1 }}>{sub}</div>}
+      </div>
     </div>
   )
 }

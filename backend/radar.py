@@ -23,7 +23,7 @@ SOCRATA_CLIENT_SECRET = os.getenv("SOCRATA_CLIENT_SECRET", "")
 
 MAX_REINTENTOS = 3
 ESPERA_REINTENTO_S = 5
-LIMITE_REGISTROS = 100
+LIMITE_REGISTROS = 1000
 
 BASE_DIR = Path(__file__).resolve().parent
 LOG_DIR = BASE_DIR.parent / "logs"
@@ -166,11 +166,7 @@ def _calcular_score(
 
 
 def _registro_a_proceso(reg: dict) -> Proceso | None:
-    numero = (
-        reg.get("id_del_proceso")
-        or reg.get("referencia_del_proceso")
-        or reg.get("numero_de_proceso")
-    )
+    numero = reg.get("id_del_proceso") or reg.get("numero_de_proceso")
     if not numero:
         return None
 
@@ -183,12 +179,18 @@ def _registro_a_proceso(reg: dict) -> Proceso | None:
         or reg.get("descripci_n_del_procedimiento")
         or ""
     )
-    fecha_cierre = _parse_fecha(
-        reg.get("fecha_de_recepcion_de_respuestas") or reg.get("fecha_de_cierre")
-    )
+    # SECOP II expone la fecha de cierre como 'fecha_de_recepcion_de'
+    fecha_cierre = _parse_fecha(reg.get("fecha_de_recepcion_de"))
+    duracion = reg.get("duracion")
+    try:
+        duracion = int(float(duracion)) if duracion not in (None, "") else None
+    except (ValueError, TypeError):
+        duracion = None
 
     return Proceso(
         numero_proceso=str(numero),
+        referencia_proceso=reg.get("referencia_del_proceso"),
+        titulo=reg.get("nombre_del_procedimiento"),
         entidad=reg.get("entidad", "") or reg.get("nombre_entidad", "") or "",
         objeto=objeto,
         presupuesto=_parse_presupuesto(reg.get("precio_base")),
@@ -197,6 +199,13 @@ def _registro_a_proceso(reg: dict) -> Proceso | None:
         departamento=reg.get("departamento_entidad"),
         unspsc_code=reg.get("codigo_principal_de_categoria"),
         fecha_publicacion=_parse_fecha(reg.get("fecha_de_publicacion_del")),
+        estado_proceso=reg.get("estado_del_procedimiento"),
+        modalidad=reg.get("modalidad_de_contratacion"),
+        fase=reg.get("fase"),
+        tipo_contrato=reg.get("tipo_de_contrato"),
+        subtipo_contrato=reg.get("subtipo_de_contrato"),
+        duracion=duracion,
+        unidad_duracion=reg.get("unidad_de_duracion"),
         tiene_adenda=bool(reg.get("adendas")),
     )
 
@@ -245,6 +254,28 @@ def correr_radar(cliente_id: int, db: Session) -> list[Proceso]:
                 .first()
             )
             if existente:
+                # Actualizar campos que pueden cambiar (fechas, URL, estado, ref, detalle)
+                existente.referencia_proceso = candidato.referencia_proceso or existente.referencia_proceso
+                existente.titulo = candidato.titulo or existente.titulo
+                existente.objeto = candidato.objeto or existente.objeto
+                existente.presupuesto = candidato.presupuesto or existente.presupuesto
+                existente.fecha_cierre = candidato.fecha_cierre or existente.fecha_cierre
+                existente.fecha_publicacion = candidato.fecha_publicacion or existente.fecha_publicacion
+                existente.departamento = candidato.departamento or existente.departamento
+                existente.unspsc_code = candidato.unspsc_code or existente.unspsc_code
+                existente.estado_proceso = candidato.estado_proceso or existente.estado_proceso
+                existente.modalidad = candidato.modalidad or existente.modalidad
+                existente.fase = candidato.fase or existente.fase
+                existente.tipo_contrato = candidato.tipo_contrato or existente.tipo_contrato
+                existente.subtipo_contrato = candidato.subtipo_contrato or existente.subtipo_contrato
+                existente.duracion = candidato.duracion or existente.duracion
+                existente.unidad_duracion = candidato.unidad_duracion or existente.unidad_duracion
+                # Preferir URL directa (OpportunityDetail) sobre login
+                if candidato.url_documento and "OpportunityDetail" in candidato.url_documento:
+                    existente.url_documento = candidato.url_documento
+                elif not existente.url_documento:
+                    existente.url_documento = candidato.url_documento
+                existente.tiene_adenda = candidato.tiene_adenda
                 proceso = existente
             else:
                 db.add(candidato)

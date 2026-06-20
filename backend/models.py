@@ -9,6 +9,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -39,6 +40,8 @@ class Proceso(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     numero_proceso = Column(String, nullable=False, unique=True, index=True)
+    referencia_proceso = Column(String, nullable=True, index=True)
+    titulo = Column(String, nullable=True)
     entidad = Column(String, nullable=False)
     objeto = Column(Text, nullable=False)
     presupuesto = Column(Integer, nullable=False, default=0)
@@ -47,6 +50,13 @@ class Proceso(Base):
     departamento = Column(String, nullable=True, index=True)
     unspsc_code = Column(String, nullable=True, index=True)
     fecha_publicacion = Column(DateTime, nullable=True)
+    estado_proceso = Column(String, nullable=True, index=True)
+    modalidad = Column(String, nullable=True)
+    fase = Column(String, nullable=True)
+    tipo_contrato = Column(String, nullable=True)
+    subtipo_contrato = Column(String, nullable=True)
+    duracion = Column(Integer, nullable=True)
+    unidad_duracion = Column(String, nullable=True)
     tiene_adenda = Column(Boolean, nullable=False, default=False)
     fecha_detectado = Column(DateTime, nullable=False, default=datetime.utcnow)
 
@@ -62,6 +72,10 @@ class ProcesoCliente(Base):
     score_match = Column(Integer, nullable=False, default=0)
     alertado = Column(Boolean, nullable=False, default=False)
     fecha_match = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("proceso_id", "cliente_id", name="uq_proceso_cliente"),
+    )
 
     proceso = relationship("Proceso", back_populates="matches")
     cliente = relationship("Cliente", back_populates="matches")
