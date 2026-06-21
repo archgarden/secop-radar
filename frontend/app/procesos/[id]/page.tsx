@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import ThemeToggle from '@/components/ThemeToggle'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -98,6 +99,9 @@ export default function ProcesosCliente() {
         </span>
         <Link href="/dashboard" style={{ color: 'var(--text-sec)', fontSize: 13 }}>Dashboard</Link>
         <span style={{ color: 'var(--orange)', fontSize: 13, fontWeight: 600 }}>Procesos compatibles</span>
+        <div style={{ marginLeft: 'auto' }}>
+          <ThemeToggle />
+        </div>
       </nav>
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 24px' }}>

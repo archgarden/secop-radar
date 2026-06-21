@@ -6,19 +6,44 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-:root {
-  --bg:       #0f1117;
-  --card:     #1a1d27;
-  --surface:  #1a1d27;
-  --border:   #2a2d3a;
-  --text:     #f1f5f9;
-  --text-sec: #64748b;
-  --orange:   #f97316;
-  --blue:     #3b82f6;
-  --green:    #22c55e;
-  --red:      #ef4444;
-  --yellow:   #f59e0b;
-  --header:   #0a0d14;
+:root, html.dark {
+  --bg:             #0f1117;
+  --card:           #1a1d27;
+  --surface:        #1a1d27;
+  --card-hover:     #1e2130;
+  --border:         #2a2d3a;
+  --text:           #f1f5f9;
+  --text-sec:       #64748b;
+  --orange:         #f97316;
+  --orange-hover:   #ea6c0a;
+  --blue:           #3b82f6;
+  --green:          #22c55e;
+  --red:            #ef4444;
+  --yellow:         #f59e0b;
+  --header:         #0a0d14;
+  --hero-bg:        #141720;
+  --hero-overlay-mid:  rgba(15,17,23,0.92);
+  --hero-overlay-end:  rgba(15,17,23,0.65);
+}
+
+html.light {
+  --bg:             #f5f5f5;
+  --card:           #ffffff;
+  --surface:        #ffffff;
+  --card-hover:     #f0f0f0;
+  --border:         #e2e2e2;
+  --text:           #111111;
+  --text-sec:       #666666;
+  --orange:         #f97316;
+  --orange-hover:   #ea6c0a;
+  --blue:           #3b82f6;
+  --green:          #22c55e;
+  --red:            #ef4444;
+  --yellow:         #f59e0b;
+  --header:         #ffffff;
+  --hero-bg:        #f5f5f5;
+  --hero-overlay-mid:  rgba(255,255,255,0.92);
+  --hero-overlay-end:  rgba(255,255,255,0.65);
 }
 
 html, body { height: 100%; }
@@ -150,21 +175,23 @@ input  { font-family: inherit; }
 }
 
 .colombia-map .dept-group path {
-  fill: #1a1d27;
-  stroke: #f97316;
+  fill: var(--text-sec);
+  opacity: 0.25;
+  stroke: var(--orange);
   stroke-width: 0.7;
   stroke-linecap: round;
   stroke-linejoin: round;
-  transition: fill 0.2s ease, stroke-width 0.2s ease;
+  transition: fill 0.2s ease, stroke-width 0.2s ease, opacity 0.2s ease;
 }
 
 .colombia-map .dept-group path:hover {
-  fill: rgba(249,115,22,.22);
+  fill: var(--orange);
+  opacity: 0.35;
   stroke-width: 1.2;
 }
 
 .colombia-map .dept-group circle {
-  fill: #f97316;
+  fill: var(--orange);
   r: 2.5;
   opacity: 0.85;
 }

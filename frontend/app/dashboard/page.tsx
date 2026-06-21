@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import ClientProfilePanel from '@/components/ClientProfilePanel'
+import ThemeToggle from '@/components/ThemeToggle'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -112,23 +113,6 @@ function mapearProceso(p: ProcesoApi, cliente: ReturnType<typeof parseCliente>):
     matchVigencia,
   }
 }
-
-/* ─── Paleta ─────────────────────────────── */
-const DARK = {
-  bg: '#0f1117', card: '#1a1d27', cardHover: '#1e2130',
-  border: '#2a2d3a', text: '#f1f5f9', textSec: '#64748b',
-  orange: '#f97316', orangeH: '#ea6c0a', green: '#22c55e',
-  red: '#ef4444', header: '#0a0d14', heroBg: '#141720',
-}
-const LIGHT = {
-  bg: '#f5f5f5', card: '#ffffff', cardHover: '#f0f0f0',
-  border: '#e2e2e2', text: '#111111', textSec: '#666666',
-  orange: '#f97316', orangeH: '#ea6c0a', green: '#16a34a',
-  red: '#dc2626', header: '#ffffff', heroBg: '#f5f5f5',
-}
-// Variable mutable que sub-componentes leen en cada render del padre
-const C: typeof DARK = { ...DARK }
-function useTheme() { return C }
 
 /* ─── Datos ───────────────────────────────── */
 
@@ -392,7 +376,6 @@ const MIS_PROPUESTAS = [
 ]
 
 function MisPropuestasDropdown() {
-  const C = useTheme()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
@@ -425,10 +408,10 @@ function MisPropuestasDropdown() {
         onClick={() => setOpen(o => !o)}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          background: open ? 'rgba(249,115,22,.15)' : C.card,
-          border: `1px solid ${open ? C.orange : C.border}`,
+          background: open ? 'rgba(249,115,22,.15)' : 'var(--card)',
+          border: `1px solid ${open ? 'var(--orange)' : 'var(--border)'}`,
           borderRadius: 6, padding: '5px 12px',
-          color: open ? C.orange : C.textSec, fontSize: 12, fontWeight: 600,
+          color: open ? 'var(--orange)' : 'var(--text-sec)', fontSize: 12, fontWeight: 600,
           cursor: 'pointer', transition: 'all 160ms', letterSpacing: '.02em',
         }}
       >
@@ -439,7 +422,7 @@ function MisPropuestasDropdown() {
         </svg>
         Mis propuestas
         <span style={{
-          background: C.orange, color: '#fff', borderRadius: 10,
+          background: 'var(--orange)', color: '#fff', borderRadius: 10,
           fontSize: 9, fontWeight: 700, padding: '1px 6px', lineHeight: '16px',
         }}>{MIS_PROPUESTAS.length}</span>
         <span style={{ fontSize: 10, marginLeft: 2 }}>{open ? '▲' : '▼'}</span>
@@ -448,43 +431,43 @@ function MisPropuestasDropdown() {
       {open && (
         <div style={{
           position: 'fixed', top: pos.top, right: pos.right,
-          width: 320, background: C.card, border: `1px solid ${C.border}`,
+          width: 320, background: 'var(--card)', border: '1px solid var(--border)',
           borderRadius: 8, zIndex: 9999,
           boxShadow: '0 16px 40px rgba(0,0,0,.6)',
           animation: 'row-enter .18s ease both',
         }}>
           {/* header dropdown */}
-          <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.text, letterSpacing: '.06em', textTransform: 'uppercase' }}>Mis propuestas activas</span>
-            <span style={{ fontSize: 10, color: C.textSec }}>SECOP II</span>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Mis propuestas activas</span>
+            <span style={{ fontSize: 10, color: 'var(--text-sec)' }}>SECOP II</span>
           </div>
 
           {/* lista */}
           {MIS_PROPUESTAS.map((p, i) => (
             <div key={i} style={{
               padding: '12px 16px',
-              borderBottom: i < MIS_PROPUESTAS.length - 1 ? `1px solid ${C.border}` : 'none',
+              borderBottom: i < MIS_PROPUESTAS.length - 1 ? '1px solid var(--border)' : 'none',
               display: 'flex', alignItems: 'center', gap: 12,
               cursor: 'pointer', transition: 'background 150ms',
             }}
-              onMouseEnter={e => (e.currentTarget.style.background = C.cardHover)}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--card-hover)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, flexShrink: 0, boxShadow: `0 0 6px ${p.color}` }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 2 }}>{p.entidad}</div>
-                <div style={{ fontSize: 10, color: C.textSec, fontFamily: 'monospace' }}>{p.id}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{p.entidad}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-sec)', fontFamily: 'monospace' }}>{p.id}</div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: p.color, letterSpacing: '.06em' }}>{p.estado}</div>
-                <div style={{ fontSize: 9, color: C.textSec, marginTop: 2 }}>Vence en {p.dias}d</div>
+                <div style={{ fontSize: 9, color: 'var(--text-sec)', marginTop: 2 }}>Vence en {p.dias}d</div>
               </div>
             </div>
           ))}
 
           {/* footer */}
-          <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, textAlign: 'center' }}>
-            <button style={{ background: 'none', border: 'none', color: C.orange, fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '.04em' }}>
+          <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+            <button style={{ background: 'none', border: 'none', color: 'var(--orange)', fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '.04em' }}>
               Ver todas las propuestas →
             </button>
           </div>
@@ -496,11 +479,10 @@ function MisPropuestasDropdown() {
 
 /* ─── Score Badge ──────────────────────────── */
 function ScoreBadge({ score }: { score: number }) {
-  const C = useTheme()
   const size = 52, r = 22
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - score / 100)
-  const col = score >= 80 ? C.orange : score >= 60 ? '#facc15' : C.red
+  const col = score >= 80 ? 'var(--orange)' : score >= 60 ? '#facc15' : 'var(--red)'
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', display: 'block' }}>
@@ -518,10 +500,9 @@ function ScoreBadge({ score }: { score: number }) {
 
 /* ─── Countdown cell ─────────────────────── */
 function CountdownCell({ iso }: { iso: string }) {
-  const C = useTheme()
   const [txt, urgent] = useCountdown(iso)
   return (
-    <span style={{ color: urgent ? C.red : C.orange, fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
+    <span style={{ color: urgent ? 'var(--red)' : 'var(--orange)', fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
       {urgent && '⚠ '}{txt}
     </span>
   )
@@ -529,26 +510,25 @@ function CountdownCell({ iso }: { iso: string }) {
 
 /* ─── Card de proceso — alto impacto ─────── */
 function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClick: () => void; active: boolean; clienteId?: number }) {
-  const C = useTheme()
   const [hov, setHov] = useState(false)
   const diff = new Date(p.cierre).getTime() - Date.now()
   const urgent = diff < 86400000
   const s = p.score || 0
-  const scoreCol = s >= 70 ? C.orange : s >= 40 ? '#facc15' : C.red
-  const accentCol = urgent ? C.red : active ? C.orange : hov ? C.orange : C.border
+  const scoreCol = s >= 70 ? 'var(--orange)' : s >= 40 ? '#facc15' : 'var(--red)'
+  const accentCol = urgent ? 'var(--red)' : active ? 'var(--orange)' : hov ? 'var(--orange)' : 'var(--border)'
 
   const matchBadges = [
-    { label: 'Depto',  ok: p.matchDepto,                                          color: C.green },
-    { label: 'UNSPSC', ok: p.matchUNSPSC,                                         color: C.green },
-    { label: 'COP',    ok: p.matchPresupuesto,                                    color: C.green },
-    { label: 'Plazo',  ok: p.matchVigencia,                                       color: C.green },
+    { label: 'Depto',  ok: p.matchDepto,                                          color: 'var(--green)' },
+    { label: 'UNSPSC', ok: p.matchUNSPSC,                                         color: 'var(--green)' },
+    { label: 'COP',    ok: p.matchPresupuesto,                                    color: 'var(--green)' },
+    { label: 'Plazo',  ok: p.matchVigencia,                                       color: 'var(--green)' },
   ]
 
   return (
     <div onClick={onClick}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
-        background: active ? C.cardHover : hov ? C.cardHover : C.card,
+        background: active ? 'var(--card-hover)' : hov ? 'var(--card-hover)' : 'var(--card)',
         borderTop: `1px solid ${accentCol}`,
         borderRight: `1px solid ${accentCol}`,
         borderBottom: `1px solid ${accentCol}`,
@@ -568,7 +548,7 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
 
       {/* Banda superior de color si es urgente */}
       {urgent && (
-        <div style={{ height: 2, background: `linear-gradient(90deg, ${C.red}, transparent)` }} />
+        <div style={{ height: 2, background: 'linear-gradient(90deg, var(--red), transparent)' }} />
       )}
 
       <div style={{ padding: '18px 18px 0' }}>
@@ -577,14 +557,14 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
           <div style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
             {urgent && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 3, background: 'rgba(239,68,68,.15)', border: '1px solid rgba(239,68,68,.3)', marginBottom: 7 }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.red }} className="pulse-status" />
-                <span style={{ fontSize: 9, fontWeight: 700, color: C.red, letterSpacing: '.1em' }}>CIERRE URGENTE</span>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--red)' }} className="pulse-status" />
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--red)', letterSpacing: '.1em' }}>CIERRE URGENTE</span>
               </div>
             )}
-            <div style={{ fontWeight: 700, fontSize: 16, color: C.text, lineHeight: 1.2, marginBottom: 3 }}>{p.entidad}</div>
-            <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.04em', fontFamily: 'monospace' }}>ID: {p.idProceso}</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', lineHeight: 1.2, marginBottom: 3 }}>{p.entidad}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-sec)', letterSpacing: '.04em', fontFamily: 'monospace' }}>ID: {p.idProceso}</div>
             {p.referenciaProceso && (
-              <div style={{ fontSize: 10, color: C.textSec, letterSpacing: '.04em', marginTop: 2 }}>Ref: {p.referenciaProceso}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-sec)', letterSpacing: '.04em', marginTop: 2 }}>Ref: {p.referenciaProceso}</div>
             )}
           </div>
           {/* Score ring grande */}
@@ -611,8 +591,8 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
                   width: 16, height: 16, borderRadius: 3, fontSize: 7, fontWeight: 600,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: b.ok ? `${b.color}22` : 'transparent',
-                  border: `1px solid ${b.ok ? b.color : C.border}`,
-                  color: b.ok ? b.color : C.textSec,
+                  border: `1px solid ${b.ok ? b.color : 'var(--border)'}`,
+                  color: b.ok ? b.color : 'var(--text-sec)',
                   cursor: 'default',
                 }}>{b.label[0]}</div>
               ))}
@@ -626,38 +606,38 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
         {/* Presupuesto — protagonista */}
         <div style={{
           margin: '12px -18px', padding: '12px 18px',
-          background: C.bg,
-          borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`,
+          background: 'var(--bg)',
+          borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
         }}>
-          <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 3 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-sec)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 3 }}>
             Valor del contrato
           </div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: C.text, letterSpacing: '-1px', lineHeight: 1 }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)', letterSpacing: '-1px', lineHeight: 1 }}>
             {fmtCOP(p.presupuesto)}
-            <span style={{ fontSize: 12, fontWeight: 400, color: C.textSec, marginLeft: 6 }}>COP</span>
+            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-sec)', marginLeft: 6 }}>COP</span>
           </div>
         </div>
 
         {/* Descripción */}
         <p style={{
-          fontSize: 12, color: C.textSec, lineHeight: 1.6, margin: '12px 0',
+          fontSize: 12, color: 'var(--text-sec)', lineHeight: 1.6, margin: '12px 0',
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         }}>{p.objeto}</p>
 
         {/* Estado / modalidad / publicación */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
           {p.estado && (
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: p.estado === 'Publicado' ? C.green : C.textSec, border: `1px solid ${p.estado === 'Publicado' ? C.green : C.border}`, padding: '2px 7px', borderRadius: 3 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: p.estado === 'Publicado' ? 'var(--green)' : 'var(--text-sec)', border: `1px solid ${p.estado === 'Publicado' ? 'var(--green)' : 'var(--border)'}`, padding: '2px 7px', borderRadius: 3 }}>
               {p.estado}
             </span>
           )}
           {p.modalidad && (
-            <span style={{ fontSize: 9, color: C.textSec, border: `1px solid ${C.border}`, padding: '2px 7px', borderRadius: 3 }}>
+            <span style={{ fontSize: 9, color: 'var(--text-sec)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: 3 }}>
               {p.modalidad}
             </span>
           )}
           {p.fechaPublicacion && (
-            <span style={{ fontSize: 9, color: C.textSec }}>
+            <span style={{ fontSize: 9, color: 'var(--text-sec)' }}>
               Publicado {new Date(p.fechaPublicacion).toLocaleDateString('es-CO')}
             </span>
           )}
@@ -667,12 +647,12 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
       {/* Footer */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '10px 18px', background: C.bg,
-        borderTop: `1px solid ${C.border}`,
+        padding: '10px 18px', background: 'var(--bg)',
+        borderTop: '1px solid var(--border)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.textSec} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span style={{ fontSize: 10, color: C.textSec, letterSpacing: '.04em', textTransform: 'uppercase' }}>Cierre:</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={'var(--text-sec)'} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span style={{ fontSize: 10, color: 'var(--text-sec)', letterSpacing: '.04em', textTransform: 'uppercase' }}>Cierre:</span>
           <CountdownCell iso={p.cierre} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -684,7 +664,7 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
             title={esUrlSecopDirecta(p.urlSecop) ? 'Abrir proceso en SECOP II' : 'Buscar en SECOP II'}
             style={{
               fontSize: 10, fontWeight: 700,
-              color: esUrlSecopDirecta(p.urlSecop) ? '#3b82f6' : C.textSec,
+              color: esUrlSecopDirecta(p.urlSecop) ? '#3b82f6' : 'var(--text-sec)',
               textDecoration: 'none', letterSpacing: '.03em',
             }}
           >
@@ -692,7 +672,7 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
           </a>
           {active ? (
             <div style={{
-              fontSize: 11, fontWeight: 600, color: C.orange,
+              fontSize: 11, fontWeight: 600, color: 'var(--orange)',
               transition: 'color 180ms', letterSpacing: '.04em',
             }}>
               ● ACTIVO
@@ -702,7 +682,7 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
               href={`/procesos/resumen?cliente_id=${clienteId}&proceso_id=${p.id}`}
               onClick={e => e.stopPropagation()}
               style={{
-                fontSize: 11, fontWeight: 600, color: hov ? C.orangeH : C.orange,
+                fontSize: 11, fontWeight: 600, color: hov ? 'var(--orange-hover)' : 'var(--orange)',
                 transition: 'color 180ms', letterSpacing: '.04em', textDecoration: 'none',
               }}
             >
@@ -710,7 +690,7 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
             </Link>
           ) : (
             <div style={{
-              fontSize: 11, fontWeight: 600, color: hov ? C.orange : C.textSec,
+              fontSize: 11, fontWeight: 600, color: hov ? 'var(--orange)' : 'var(--text-sec)',
               transition: 'color 180ms', letterSpacing: '.04em',
             }}>
               Ver análisis →
@@ -724,7 +704,6 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
 
 /* ─── Panel Seguimiento de Propuesta ─────── */
 function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData | null; cliente: ClienteApi | null; contratos: ContratoApi[] }) {
-  const C = useTheme()
   const [docStatuses, setDocStatuses] = useState<DocStatus[]>(DOCS_SECOP.map(d => d.status))
   const [tab, setTab] = useState<'docs' | 'aiu' | 'contratos' | 'etapas'>('docs')
 
@@ -761,7 +740,7 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
     })
   }
 
-  function docStatusColor(s: DocStatus) { return s === 'listo' ? C.green : s === 'en_tramite' ? '#f59e0b' : C.red }
+  function docStatusColor(s: DocStatus) { return s === 'listo' ? 'var(--green)' : s === 'en_tramite' ? '#f59e0b' : 'var(--red)' }
   function docStatusLabel(s: DocStatus) { return s === 'listo' ? 'LISTO' : s === 'en_tramite' ? 'EN TRÁMITE' : 'PENDIENTE' }
 
   // ── Countdown real-time ──
@@ -779,10 +758,10 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
 
   if (!proceso) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14 }}>
-      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke={C.textSec} strokeWidth="1.3">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke={'var(--text-sec)'} strokeWidth="1.3">
         <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
       </svg>
-      <p style={{ color: C.textSec, fontSize: 13, textAlign: 'center', lineHeight: 1.6 }}>
+      <p style={{ color: 'var(--text-sec)', fontSize: 13, textAlign: 'center', lineHeight: 1.6 }}>
         Selecciona una oportunidad<br/>para ver el seguimiento
       </p>
     </div>
@@ -793,13 +772,13 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
 
       {/* ── Encabezado + Countdown ── */}
       <div style={{ marginBottom: 4 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 3 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 3 }}>
           Seguimiento de Propuesta
         </div>
-        <div style={{ fontSize: 10, color: C.orange, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>
+        <div style={{ fontSize: 10, color: 'var(--orange)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>
           ACTIVO: {proceso.idProceso}
         </div>
-        <div style={{ fontSize: 12, color: C.textSec, lineHeight: 1.4, marginBottom: 8 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-sec)', lineHeight: 1.4, marginBottom: 8 }}>
           {proceso.entidad}
         </div>
 
@@ -809,7 +788,7 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               background: 'rgba(249,115,22,.12)', border: '1px solid rgba(249,115,22,.3)',
-              color: C.orange, fontSize: 11, fontWeight: 700,
+              color: 'var(--orange)', fontSize: 11, fontWeight: 700,
               padding: '6px 12px', borderRadius: 4, textDecoration: 'none',
               marginBottom: 12, letterSpacing: '.03em',
             }}
@@ -820,20 +799,20 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
 
         {/* Countdown prominente */}
         <div style={{
-          background: countdownUrgent ? 'rgba(239,68,68,.12)' : C.bg,
-          border: `1px solid ${countdownUrgent ? 'rgba(239,68,68,.4)' : C.border}`,
+          background: countdownUrgent ? 'rgba(239,68,68,.12)' : 'var(--bg)',
+          border: `1px solid ${countdownUrgent ? 'rgba(239,68,68,.4)' : 'var(--border)'}`,
           borderRadius: 6, padding: '10px 14px',
           display: 'flex', alignItems: 'center', gap: 10,
           marginBottom: 12,
         }}>
           <span style={{ fontSize: 20 }}>{countdownUrgent ? '⚠' : '⏱'}</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
+            <div style={{ fontSize: 9, color: 'var(--text-sec)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
               Cierre del proceso
             </div>
             <div style={{
               fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-              color: countdownUrgent ? C.red : C.orange,
+              color: countdownUrgent ? 'var(--red)' : 'var(--orange)',
               letterSpacing: '-0.5px', lineHeight: 1.1,
             }}>
               {countdownTxt}
@@ -849,37 +828,37 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
             borderRadius: 6,
             padding: '10px 14px',
           }}>
-            <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
+            <div style={{ fontSize: 9, color: 'var(--text-sec)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
               Modalidad recomendada
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#3b82f6', marginBottom: 3 }}>
               {modalidad.modalidad}
             </div>
-            <div style={{ fontSize: 10, color: C.textSec, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-sec)', lineHeight: 1.4 }}>
               {modalidad.descripcion}
             </div>
           </div>
         )}
       </div>
 
-      <div style={{ height: 1, background: C.border, margin: '14px 0' }} />
+      <div style={{ height: 1, background: 'var(--border)', margin: '14px 0' }} />
 
       {/* ── Score de preparación ── */}
-      <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '12px 14px', marginBottom: 16 }}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '12px 14px', marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Nivel de preparación</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: readiness >= 60 ? C.orange : C.red }}>{readiness}%</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Nivel de preparación</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: readiness >= 60 ? 'var(--orange)' : 'var(--red)' }}>{readiness}%</span>
         </div>
-        <div style={{ height: 5, background: C.border, borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
+        <div style={{ height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
           <div style={{
             width: `${readiness}%`, height: '100%', borderRadius: 3,
             background: readiness >= 60
-              ? `linear-gradient(90deg, ${C.orange}, #fb923c)`
-              : `linear-gradient(90deg, ${C.red}, #f87171)`,
+              ? 'linear-gradient(90deg, var(--orange), #fb923c)'
+              : 'linear-gradient(90deg, var(--red), #f87171)',
             transition: 'width 600ms ease',
           }} />
         </div>
-        <div style={{ fontSize: 10, color: C.textSec }}>
+        <div style={{ fontSize: 10, color: 'var(--text-sec)' }}>
           {listoCount} de {DOCS_SECOP.length} documentos listos
         </div>
       </div>
@@ -889,9 +868,9 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
         {([['docs', 'Documentos'], ['aiu', 'Calculadora AIU'], ['contratos', 'Contratos Similares'], ['etapas', 'Etapas SECOP II']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{
             padding: '7px 4px', borderRadius: 5, fontSize: 9, fontWeight: 600,
-            border: `1px solid ${tab === key ? C.orange : C.border}`,
-            background: tab === key ? 'rgba(249,115,22,.12)' : C.bg,
-            color: tab === key ? C.orange : C.textSec,
+            border: `1px solid ${tab === key ? 'var(--orange)' : 'var(--border)'}`,
+            background: tab === key ? 'rgba(249,115,22,.12)' : 'var(--bg)',
+            color: tab === key ? 'var(--orange)' : 'var(--text-sec)',
             cursor: 'pointer', transition: 'all 160ms', letterSpacing: '.02em',
           }}>{label}</button>
         ))}
@@ -900,7 +879,7 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
       {/* ── DOCUMENTOS (3 estados) ── */}
       {tab === 'docs' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 4 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-sec)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 4 }}>
             Documentos obligatorios — pliego de condiciones
           </div>
           {DOCS_SECOP.map((doc, i) => {
@@ -911,7 +890,7 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
                 onClick={() => cycleDocStatus(i)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                  background: C.bg,
+                  background: 'var(--bg)',
                   border: `1px solid ${s === 'listo' ? 'rgba(34,197,94,.35)' : s === 'en_tramite' ? 'rgba(245,158,11,.35)' : 'rgba(239,68,68,.25)'}`,
                   borderRadius: 6, cursor: 'pointer', transition: 'all 160ms',
                 }}>
@@ -940,7 +919,7 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
                   )}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: s !== 'pendiente' ? C.text : C.textSec, marginBottom: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: s !== 'pendiente' ? 'var(--text)' : 'var(--text-sec)', marginBottom: 1 }}>
                     {doc.nombre}
                   </div>
                 </div>
@@ -959,28 +938,28 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
       {/* ── CALCULADORA AIU ── */}
       {tab === 'aiu' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 2 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-sec)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 2 }}>
             Valor estimado de propuesta económica
           </div>
 
           {/* Costos directos */}
           <div>
-            <div style={{ fontSize: 10, color: C.textSec, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+            <div style={{ fontSize: 10, color: 'var(--text-sec)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.06em' }}>
               Costos directos (materiales, mano de obra, equipos)
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: C.textSec, fontWeight: 600, fontSize: 13 }}>$</span>
+              <span style={{ color: 'var(--text-sec)', fontWeight: 600, fontSize: 13 }}>$</span>
               <input
                 type="text"
                 value={costosDirectos}
                 onChange={e => setCostosDirectos(e.target.value.replace(/[^0-9.,]/g, ''))}
                 placeholder="Ej: 3500000000"
                 style={{
-                  flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4,
-                  padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none',
+                  flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4,
+                  padding: '8px 10px', color: 'var(--text)', fontSize: 13, outline: 'none',
                 }}
               />
-              <span style={{ color: C.textSec, fontSize: 11 }}>COP</span>
+              <span style={{ color: 'var(--text-sec)', fontSize: 11 }}>COP</span>
             </div>
           </div>
 
@@ -992,7 +971,7 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
               ['Utilidad %', utilPct, setUtilPct, '5-8%'],
             ] as const).map(([label, val, setter, hint]) => (
               <div key={label}>
-                <div style={{ fontSize: 9, color: C.textSec, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                <div style={{ fontSize: 9, color: 'var(--text-sec)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.04em' }}>
                   {label}
                 </div>
                 <input
@@ -1001,11 +980,11 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
                   onChange={e => setter(e.target.value)}
                   min="0" max="100"
                   style={{
-                    width: '100%', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4,
-                    padding: '7px 8px', color: C.text, fontSize: 13, outline: 'none', textAlign: 'center',
+                    width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4,
+                    padding: '7px 8px', color: 'var(--text)', fontSize: 13, outline: 'none', textAlign: 'center',
                   }}
                 />
-                <div style={{ fontSize: 8, color: C.textSec, textAlign: 'center', marginTop: 2 }}>{hint}</div>
+                <div style={{ fontSize: 8, color: 'var(--text-sec)', textAlign: 'center', marginTop: 2 }}>{hint}</div>
               </div>
             ))}
           </div>
@@ -1013,41 +992,41 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
           {/* Resultados — solo si hay costos directos */}
           {cd > 0 && (
             <div style={{
-              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '12px 14px',
+              background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '12px 14px',
               display: 'flex', flexDirection: 'column', gap: 8,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                <span style={{ color: C.textSec }}>Subtotal costos directos</span>
-                <span style={{ color: C.text, fontWeight: 600 }}>{fmtMillones(cd)}</span>
+                <span style={{ color: 'var(--text-sec)' }}>Subtotal costos directos</span>
+                <span style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtMillones(cd)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                <span style={{ color: C.textSec }}>Administración ({adminPct}%)</span>
-                <span style={{ color: C.text, fontWeight: 600 }}>{fmtMillones(adminVal)}</span>
+                <span style={{ color: 'var(--text-sec)' }}>Administración ({adminPct}%)</span>
+                <span style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtMillones(adminVal)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                <span style={{ color: C.textSec }}>Imprevistos ({imprevPct}%)</span>
-                <span style={{ color: C.text, fontWeight: 600 }}>{fmtMillones(imprevVal)}</span>
+                <span style={{ color: 'var(--text-sec)' }}>Imprevistos ({imprevPct}%)</span>
+                <span style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtMillones(imprevVal)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                <span style={{ color: C.textSec }}>Utilidad ({utilPct}%)</span>
-                <span style={{ color: C.text, fontWeight: 600 }}>{fmtMillones(utilVal)}</span>
+                <span style={{ color: 'var(--text-sec)' }}>Utilidad ({utilPct}%)</span>
+                <span style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtMillones(utilVal)}</span>
               </div>
-              <div style={{ height: 1, background: C.border }} />
+              <div style={{ height: 1, background: 'var(--border)' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span style={{ fontSize: 10, color: C.orange, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                <span style={{ fontSize: 10, color: 'var(--orange)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em' }}>
                   Valor AIU
                 </span>
-                <span style={{ fontSize: 12, color: C.text, fontWeight: 700 }}>{fmtMillones(aiuTotal)}</span>
+                <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 700 }}>{fmtMillones(aiuTotal)}</span>
               </div>
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
                 background: 'rgba(249,115,22,.08)', borderRadius: 4, padding: '8px 10px',
                 margin: '4px -6px -4px',
               }}>
-                <span style={{ fontSize: 12, color: C.orange, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                <span style={{ fontSize: 12, color: 'var(--orange)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>
                   TOTAL PROPUESTA
                 </span>
-                <span style={{ fontSize: 22, fontWeight: 800, color: C.orange, letterSpacing: '-0.5px', lineHeight: 1 }}>
+                <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--orange)', letterSpacing: '-0.5px', lineHeight: 1 }}>
                   {fmtMillones(propuestaTotal)}
                 </span>
               </div>
@@ -1055,24 +1034,24 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 fontSize: 11, marginTop: 4,
               }}>
-                <span style={{ color: C.textSec }}>vs. presupuesto oficial ({fmtMillones(presupuestoOficial)})</span>
+                <span style={{ color: 'var(--text-sec)' }}>vs. presupuesto oficial ({fmtMillones(presupuestoOficial)})</span>
                 <span style={{
                   fontWeight: 700, fontSize: 13,
-                  color: pctSobrePresupuesto <= 95 ? C.green : pctSobrePresupuesto > 100 ? C.red : '#f59e0b',
+                  color: pctSobrePresupuesto <= 95 ? 'var(--green)' : pctSobrePresupuesto > 100 ? 'var(--red)' : '#f59e0b',
                 }}>
                   {pctSobrePresupuesto.toFixed(1)}%
                 </span>
               </div>
               <div style={{
-                height: 4, background: C.border, borderRadius: 2, overflow: 'hidden', marginTop: 2,
+                height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', marginTop: 2,
               }}>
                 <div style={{
                   width: `${Math.min(pctSobrePresupuesto, 120)}%`, height: '100%', borderRadius: 2,
-                  background: pctSobrePresupuesto <= 95 ? C.green : pctSobrePresupuesto > 100 ? C.red : '#f59e0b',
+                  background: pctSobrePresupuesto <= 95 ? 'var(--green)' : pctSobrePresupuesto > 100 ? 'var(--red)' : '#f59e0b',
                   transition: 'width 300ms ease',
                 }} />
               </div>
-              <div style={{ fontSize: 9, color: pctSobrePresupuesto <= 95 ? C.green : pctSobrePresupuesto > 100 ? C.red : '#f59e0b', fontWeight: 600, textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: pctSobrePresupuesto <= 95 ? 'var(--green)' : pctSobrePresupuesto > 100 ? 'var(--red)' : '#f59e0b', fontWeight: 600, textAlign: 'center' }}>
                 {pctSobrePresupuesto <= 95 ? '✓ Dentro del rango óptimo' : pctSobrePresupuesto > 100 ? '⚠ Excede el presupuesto oficial' : '⚡ Cercano al límite'}
               </div>
             </div>
@@ -1083,27 +1062,27 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
       {/* ── CONTRATOS SIMILARES ── */}
       {tab === 'contratos' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 2 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-sec)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 2 }}>
             Histórico de adjudicaciones — {cliente ? labelUNSPSC(parseCliente(cliente).unspsc_codes[0] || '') : ''} / {cliente ? labelUNSPSC(parseCliente(cliente).unspsc_codes[1] || '') : ''}
           </div>
-          <div style={{ fontSize: 9, color: C.textSec, marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-sec)', marginBottom: 8 }}>
             Contratos recientes en los mismos códigos UNSPSC y departamentos del cliente. Fuente: SECOP II — datos abiertos.
           </div>
 
           {contratos.map((c, i) => (
             <div key={i} style={{
-              padding: '10px 12px', background: C.bg,
-              border: `1px solid ${C.border}`, borderRadius: 6,
+              padding: '10px 12px', background: 'var(--bg)',
+              border: '1px solid var(--border)', borderRadius: 6,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', flex: 1, minWidth: 0 }}>
                   {(c.proveedor_adjudicado || 'Sin nombre').length > 28 ? (c.proveedor_adjudicado || '').slice(0, 26) + '…' : (c.proveedor_adjudicado || 'Sin nombre')}
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: C.orange, flexShrink: 0, marginLeft: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--orange)', flexShrink: 0, marginLeft: 8 }}>
                   {fmtCOP(Number(c.valor_del_contrato) || 0)}
                 </span>
               </div>
-              <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>{c.nombre_entidad} — {c.fecha_de_firma ? c.fecha_de_firma.slice(0, 10) : '—'}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-sec)', marginBottom: 2 }}>{c.nombre_entidad} — {c.fecha_de_firma ? c.fecha_de_firma.slice(0, 10) : '—'}</div>
               <div style={{ display: 'flex', gap: 6 }}>
                 <span style={{ fontSize: 8, padding: '1px 6px', borderRadius: 3, background: 'rgba(245,158,11,.15)', color: '#f59e0b', fontWeight: 600 }}>
                   {c.modalidad_de_contratacion || '—'}
@@ -1119,9 +1098,9 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
             <div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginBottom: 4 }}>
               Inteligencia de mercado
             </div>
-            <div style={{ fontSize: 10, color: C.textSec, lineHeight: 1.5 }}>
-              Ticket promedio: <span style={{ color: C.text, fontWeight: 600 }}>{fmtCOP(Math.round(contratos.reduce((a, c) => a + (Number(c.valor_del_contrato) || 0), 0) / (contratos.length || 1)))}</span><br />
-              Competidores activos: <span style={{ color: C.orange, fontWeight: 600 }}>{new Set(contratos.map(c => c.proveedor_adjudicado)).size}</span> en {cliente ? parseCliente(cliente).departamentos.length : 0} deptos.
+            <div style={{ fontSize: 10, color: 'var(--text-sec)', lineHeight: 1.5 }}>
+              Ticket promedio: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtCOP(Math.round(contratos.reduce((a, c) => a + (Number(c.valor_del_contrato) || 0), 0) / (contratos.length || 1)))}</span><br />
+              Competidores activos: <span style={{ color: 'var(--orange)', fontWeight: 600 }}>{new Set(contratos.map(c => c.proveedor_adjudicado)).size}</span> en {cliente ? parseCliente(cliente).departamentos.length : 0} deptos.
             </div>
           </div>
         </div>
@@ -1130,7 +1109,7 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
       {/* ── ETAPAS SECOP II ── */}
       {tab === 'etapas' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 12 }}>
+          <div style={{ fontSize: 9, color: 'var(--text-sec)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 12 }}>
             Cronograma del proceso licitatorio
           </div>
           {ETAPAS_SECOP.map((e, i) => {
@@ -1141,14 +1120,14 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
                 {!isLast && (
                   <div style={{
                     position: 'absolute', left: 9, top: 20, bottom: -6, width: 1,
-                    background: e.done ? C.orange : C.border,
+                    background: e.done ? 'var(--orange)' : 'var(--border)',
                     zIndex: 0,
                   }} />
                 )}
                 <div style={{
                   width: 20, height: 20, borderRadius: '50%', flexShrink: 0, zIndex: 1, marginTop: 1,
-                  background: e.done ? C.orange : isCurrent ? 'rgba(249,115,22,.15)' : C.bg,
-                  border: `2px solid ${e.done ? C.orange : isCurrent ? C.orange : C.border}`,
+                  background: e.done ? 'var(--orange)' : isCurrent ? 'rgba(249,115,22,.15)' : 'var(--bg)',
+                  border: `2px solid ${e.done ? 'var(--orange)' : isCurrent ? 'var(--orange)' : 'var(--border)'}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {e.done && (
@@ -1157,14 +1136,14 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
                     </svg>
                   )}
                   {isCurrent && !e.done && (
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.orange }} />
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--orange)' }} />
                   )}
                 </div>
                 <div style={{ paddingBottom: isLast ? 0 : 18, flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: isCurrent ? 600 : 400, color: e.done ? C.textSec : isCurrent ? C.text : C.textSec, lineHeight: 1.3 }}>
+                  <div style={{ fontSize: 12, fontWeight: isCurrent ? 600 : 400, color: e.done ? 'var(--text-sec)' : isCurrent ? 'var(--text)' : 'var(--text-sec)', lineHeight: 1.3 }}>
                     {e.label}
                   </div>
-                  <div style={{ fontSize: 10, marginTop: 2, color: (e as any).urgente ? C.red : e.done ? C.green : C.textSec }}>
+                  <div style={{ fontSize: 10, marginTop: 2, color: (e as any).urgente ? 'var(--red)' : e.done ? 'var(--green)' : 'var(--text-sec)' }}>
                     {(e as any).urgente ? '⚠ ' : ''}{e.fecha}
                   </div>
                 </div>
@@ -1180,25 +1159,6 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
 /* ─── PÁGINA (Dashboard) ────────────────── */
 export default function Dashboard() {
   const clock = useClock()
-  const [theme, setTheme] = useState<'dark'|'light'>('dark')
-  const palette = theme === 'dark' ? DARK : LIGHT
-  // Sincronizar paleta mutable con el tema activo (para sub-componentes)
-  Object.assign(C, palette)
-  // Inyectar CSS variables en el root para que el cambio sea inmediato en el DOM
-  useEffect(() => {
-    const p = theme === 'dark' ? DARK : LIGHT
-    Object.assign(C, p)
-    const r = document.documentElement.style
-    r.setProperty('--t-bg',      p.bg)
-    r.setProperty('--t-card',    p.card)
-    r.setProperty('--t-border',  p.border)
-    r.setProperty('--t-text',    p.text)
-    r.setProperty('--t-textsec', p.textSec)
-    r.setProperty('--t-orange',  p.orange)
-    r.setProperty('--t-header',  p.header)
-    r.setProperty('--t-herobg',  p.heroBg)
-    r.setProperty('--t-card2',   p.cardHover)
-  }, [theme])
   const [filtro, setFiltro] = useState('Todos')
   const [filtroDepto, setFiltroDepto] = useState('Todos')
   const [filtroTipo, setFiltroTipo] = useState('Todos')
@@ -1272,39 +1232,39 @@ export default function Dashboard() {
   const METRICAS = [
     {
       label: 'OPORTUNIDADES HOY', val: `${cTotal}`, detail: 'Procesos encontrados',
-      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>,
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={'var(--orange)'} strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>,
       urgent: false,
     },
     {
       label: 'PRESUPUESTO AGREGADO (COP)', val: `$${cBudget}B`, detail: 'Suma de procesos',
-      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>,
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={'var(--orange)'} strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>,
       urgent: false,
     },
     {
       label: 'CIERRES URGENTES', val: `${urgentes}`, detail: 'Cierre en menos de 24h',
-      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={'var(--orange)'} strokeWidth="1.8" strokeLinecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
       urgent: true,
     },
     {
       label: 'ALTA COMPATIBILIDAD', val: `${altaCompat}`, detail: 'Score ≥ 70%, listos para proponer',
-      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+      icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={'var(--orange)'} strokeWidth="1.8" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       urgent: false,
     },
   ]
 
   return (
-    <div key={theme} style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       {/* ── HEADER ── */}
       <header style={{
-        background: C.header, borderBottom: `1px solid ${C.border}`, height: 56,
+        background: 'var(--header)', borderBottom: '1px solid var(--border)', height: 56,
         display: 'flex', alignItems: 'center', padding: '0 28px',
         position: 'sticky', top: 0, zIndex: 40,
         boxShadow: '0 2px 20px rgba(0,0,0,.5)', overflow: 'hidden',
       }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 32 }}>
-          <span className="pulse-status" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: C.orange, flexShrink: 0 }} />
-          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '3px', color: C.text, textTransform: 'uppercase' }}>SECOP RADAR</span>
+          <span className="pulse-status" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--orange)', flexShrink: 0 }} />
+          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '3px', color: 'var(--text)', textTransform: 'uppercase' }}>SECOP RADAR</span>
         </div>
         {/* Nav izquierda + Mis Propuestas juntos */}
         <nav style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -1319,40 +1279,26 @@ export default function Dashboard() {
               textDecoration: 'none',
               background: n.active ? 'rgba(249,115,22,.12)' : 'none',
               border: n.active ? `1px solid rgba(249,115,22,.25)` : '1px solid transparent',
-              color: n.active ? C.orange : C.textSec, padding: '5px 14px', borderRadius: 5,
+              color: n.active ? 'var(--orange)' : 'var(--text-sec)', padding: '5px 14px', borderRadius: 5,
               fontSize: 13, cursor: 'pointer', fontWeight: n.active ? 600 : 400,
               transition: 'all 150ms',
             }}
-              onMouseEnter={e => { if (!n.active) e.currentTarget.style.color = C.text }}
-              onMouseLeave={e => { if (!n.active) e.currentTarget.style.color = C.textSec }}
+              onMouseEnter={e => { if (!n.active) e.currentTarget.style.color = 'var(--text)' }}
+              onMouseLeave={e => { if (!n.active) e.currentTarget.style.color = 'var(--text-sec)' }}
             >{n.label}</Link>
           ))}
-          <div style={{ width: 1, height: 20, background: C.border, margin: '0 8px' }} />
+          <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 8px' }} />
           <MisPropuestasDropdown />
         </nav>
         {/* Derecha */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12, color: C.textSec }}>{clock}</span>
+          <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12, color: 'var(--text-sec)' }}>{clock}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: C.orange }} className="pulse-status" />
-            <span style={{ fontSize: 12, color: C.orange, fontWeight: 600, letterSpacing: '.06em' }}>LIVE SYNC ACTIVE</span>
+            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: 'var(--orange)' }} className="pulse-status" />
+            <span style={{ fontSize: 12, color: 'var(--orange)', fontWeight: 600, letterSpacing: '.06em' }}>LIVE SYNC ACTIVE</span>
           </div>
-          <div style={{ width: 1, height: 18, background: C.border }} />
-          <button
-            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-            title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            style={{
-              width: 30, height: 30, borderRadius: 6,
-              background: 'transparent', border: `1px solid ${C.border}`,
-              color: C.textSec, fontSize: 14, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'border-color 150ms, color 150ms',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.orange; e.currentTarget.style.color = C.orange }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textSec }}
-          >
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
+          <div style={{ width: 1, height: 18, background: 'var(--border)' }} />
+          <ThemeToggle />
         </div>
       </header>
 
@@ -1365,16 +1311,16 @@ export default function Dashboard() {
           {/* ─ Hero: Título + Métricas con radar de fondo ─ */}
           <div style={{
             position: 'relative', borderRadius: 10,
-            background: C.heroBg,
-            border: `1px solid ${C.border}`,
+            background: 'var(--hero-bg)',
+            border: '1px solid var(--border)',
             padding: '28px 28px 24px',
             clipPath: 'inset(0 round 10px)',
           }}>
             <Particles />
             {/* Título */}
             <div style={{ position: 'relative', zIndex: 1, marginBottom: 14 }}>
-              <h1 style={{ fontSize: 34, fontWeight: 700, color: C.text, lineHeight: 1, marginBottom: 6 }}>Control de Licitaciones</h1>
-              <p style={{ fontSize: 13, color: C.textSec }}>Monitoreo automatizado de contratación pública en SECOP II — Colombia.</p>
+              <h1 style={{ fontSize: 34, fontWeight: 700, color: 'var(--text)', lineHeight: 1, marginBottom: 6 }}>Control de Licitaciones</h1>
+              <p style={{ fontSize: 13, color: 'var(--text-sec)' }}>Monitoreo automatizado de contratación pública en SECOP II — Colombia.</p>
             </div>
 
             {/* ─ Cliente activo ─ */}
@@ -1383,19 +1329,19 @@ export default function Dashboard() {
                 {cliente ? (
                   <ClientProfilePanel clienteId={cliente.id} compact />
                 ) : (
-                  <div style={{ background: `${C.card}aa`, backdropFilter: 'blur(6px)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px' }}>
-                    <div style={{ fontSize: 13, color: C.textSec }}>Cargando cliente...</div>
+                  <div style={{ background: 'var(--card)aa', backdropFilter: 'blur(6px)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 18px' }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-sec)' }}>Cargando cliente...</div>
                   </div>
                 )}
               </div>
               <div style={{
                 width: 120, flexShrink: 0, textAlign: 'right',
-                background: `${C.card}aa`, backdropFilter: 'blur(6px)',
-                border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px',
+                background: 'var(--card)aa', backdropFilter: 'blur(6px)',
+                border: '1px solid var(--border)', borderRadius: 8, padding: '14px 18px',
               }}>
-                <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.08em', textTransform: 'uppercase' }}>Perfil activo</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: C.orange, margin: '4px 0' }}>{procesos.filter(p => (p.score || 0) >= 70).length}</div>
-                <div style={{ fontSize: 10, color: C.textSec }}>matches</div>
+                <div style={{ fontSize: 9, color: 'var(--text-sec)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Perfil activo</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--orange)', margin: '4px 0' }}>{procesos.filter(p => (p.score || 0) >= 70).length}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-sec)' }}>matches</div>
               </div>
             </div>
 
@@ -1403,18 +1349,18 @@ export default function Dashboard() {
             <div style={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
               {METRICAS.map((m, i) => (
                 <div key={i} style={{
-                  background: `${C.card}cc`, backdropFilter: 'blur(6px)',
-                  borderTop: `1px solid ${m.urgent ? C.orange : C.border}`,
-                  borderRight: `1px solid ${m.urgent ? C.orange : C.border}`,
-                  borderBottom: `1px solid ${m.urgent ? C.orange : C.border}`,
-                  borderLeft: `1px solid ${m.urgent ? C.orange : C.border}`,
+                  background: 'var(--card)cc', backdropFilter: 'blur(6px)',
+                  borderTop: `1px solid ${m.urgent ? 'var(--orange)' : 'var(--border)'}`,
+                  borderRight: `1px solid ${m.urgent ? 'var(--orange)' : 'var(--border)'}`,
+                  borderBottom: `1px solid ${m.urgent ? 'var(--orange)' : 'var(--border)'}`,
+                  borderLeft: `1px solid ${m.urgent ? 'var(--orange)' : 'var(--border)'}`,
                   borderRadius: 8, padding: '18px 18px 16px',
                   boxShadow: m.urgent ? `0 0 16px rgba(249,115,22,.2)` : 'none',
                 }}>
                   <div style={{ marginBottom: 12 }}>{m.icon}</div>
-                  <div style={{ fontSize: 9, color: C.textSec, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 8 }}>{m.label}</div>
-                  <div style={{ fontSize: 40, fontWeight: 700, color: C.text, lineHeight: 1, letterSpacing: '-1.5px', marginBottom: 8 }}>{m.val}</div>
-                  <div style={{ fontSize: 11, color: m.urgent ? C.red : C.orange }}>{m.detail}</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-sec)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 8 }}>{m.label}</div>
+                  <div style={{ fontSize: 40, fontWeight: 700, color: 'var(--text)', lineHeight: 1, letterSpacing: '-1.5px', marginBottom: 8 }}>{m.val}</div>
+                  <div style={{ fontSize: 11, color: m.urgent ? 'var(--red)' : 'var(--orange)' }}>{m.detail}</div>
                 </div>
               ))}
             </div>
@@ -1425,13 +1371,13 @@ export default function Dashboard() {
             {/* Row 1: Departamento + Tipo */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>Oportunidades activas</div>
-                <div style={{ fontSize: 12, color: C.textSec }}>{procesados.length} procesos compatibles</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>Oportunidades activas</div>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)' }}>{procesados.length} procesos compatibles</div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <select value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)} style={{
-                  background: C.card, border: `1px solid ${filtroDepto !== 'Todos' ? C.orange : C.border}`,
-                  borderRadius: 6, padding: '7px 12px', color: filtroDepto !== 'Todos' ? C.orange : C.textSec,
+                  background: 'var(--card)', border: `1px solid ${filtroDepto !== 'Todos' ? 'var(--orange)' : 'var(--border)'}`,
+                  borderRadius: 6, padding: '7px 12px', color: filtroDepto !== 'Todos' ? 'var(--orange)' : 'var(--text-sec)',
                   fontSize: 12, outline: 'none', cursor: 'pointer', fontWeight: 500, maxWidth: 180,
                 }}>
                   {deptosUnicos.map(d => <option key={d} value={d}>{d === 'Todos' ? '🏛 Todos los deptos.' : d}</option>)}
@@ -1439,9 +1385,9 @@ export default function Dashboard() {
                 {tiposUnicos.map(t => (
                   <button key={t} onClick={() => setFiltroTipo(t)} style={{
                     padding: '6px 14px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                    background: filtroTipo === t ? C.orange : 'transparent',
-                    border: `1px solid ${filtroTipo === t ? C.orange : C.border}`,
-                    color: filtroTipo === t ? '#fff' : C.textSec,
+                    background: filtroTipo === t ? 'var(--orange)' : 'transparent',
+                    border: `1px solid ${filtroTipo === t ? 'var(--orange)' : 'var(--border)'}`,
+                    color: filtroTipo === t ? '#fff' : 'var(--text-sec)',
                     transition: 'all 160ms', whiteSpace: 'nowrap',
                   }}>{t === 'Todos' ? '🏗 Todos los tipos' : t}</button>
                 ))}
@@ -1453,26 +1399,26 @@ export default function Dashboard() {
               {filtros.map(f => (
                 <button key={f} onClick={() => setFiltro(f)} style={{
                   padding: '6px 16px', borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                  background: filtro === f ? C.orange : 'transparent',
-                  border: `1px solid ${filtro === f ? C.orange : C.border}`,
-                  color: filtro === f ? '#fff' : C.textSec,
+                  background: filtro === f ? 'var(--orange)' : 'transparent',
+                  border: `1px solid ${filtro === f ? 'var(--orange)' : 'var(--border)'}`,
+                  color: filtro === f ? '#fff' : 'var(--text-sec)',
                   transition: 'all 160ms',
                 }}>{f}</button>
               ))}
               <input value={busq} onChange={e => setBusq(e.target.value)} placeholder="Buscar entidad u objeto..."
                 style={{
-                  background: C.card, border: `1px solid ${C.border}`, borderRadius: 6,
-                  padding: '6px 14px', color: C.text, fontSize: 13, outline: 'none', width: 200, marginLeft: 'auto',
+                  background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6,
+                  padding: '6px 14px', color: 'var(--text)', fontSize: 13, outline: 'none', width: 200, marginLeft: 'auto',
                 }} />
             </div>
           </div>
 
           {/* ─ Estado de carga / error ─ */}
           {loading && (
-            <div style={{ color: C.textSec, padding: 48, textAlign: 'center' }}>Cargando oportunidades reales de SECOP II...</div>
+            <div style={{ color: 'var(--text-sec)', padding: 48, textAlign: 'center' }}>Cargando oportunidades reales de SECOP II...</div>
           )}
           {error && !loading && (
-            <div style={{ background: 'rgba(239,68,68,.1)', border: `1px solid ${C.red}`, color: C.red, padding: 16, borderRadius: 6, fontSize: 13 }}>
+            <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid var(--red)', color: 'var(--red)', padding: 16, borderRadius: 6, fontSize: 13 }}>
               Error: {error}
             </div>
           )}
@@ -1499,14 +1445,14 @@ export default function Dashboard() {
             style={{
               position: 'absolute', left: -14, top: 20,
               width: 28, height: 28, borderRadius: '50%',
-              background: C.card, border: `1px solid ${C.border}`,
-              color: C.textSec, fontSize: 13, cursor: 'pointer',
+              background: 'var(--card)', border: '1px solid var(--border)',
+              color: 'var(--text-sec)', fontSize: 13, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 2px 8px rgba(0,0,0,.4)',
               transition: 'background 160ms, color 160ms',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = C.orange; e.currentTarget.style.color = '#fff' }}
-            onMouseLeave={e => { e.currentTarget.style.background = C.card; e.currentTarget.style.color = C.textSec }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--orange)'; e.currentTarget.style.color = '#fff' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--card)'; e.currentTarget.style.color = 'var(--text-sec)' }}
           >
             {panelOpen ? '›' : '‹'}
           </button>
@@ -1516,8 +1462,8 @@ export default function Dashboard() {
         <div style={{
           width: panelOpen ? 380 : 40,
           minWidth: panelOpen ? 380 : 40,
-          borderLeft: `1px solid ${C.border}`,
-          background: C.card, overflowY: panelOpen ? 'auto' : 'hidden',
+          borderLeft: '1px solid var(--border)',
+          background: 'var(--card)', overflowY: panelOpen ? 'auto' : 'hidden',
           display: 'flex', flexDirection: 'column',
           transition: 'width 280ms ease, min-width 280ms ease',
           position: 'relative', flexShrink: 0,
@@ -1528,7 +1474,7 @@ export default function Dashboard() {
               position: 'absolute', top: '50%', left: '50%',
               transform: 'translate(-50%, -50%) rotate(-90deg)',
               whiteSpace: 'nowrap', fontSize: 10, fontWeight: 600,
-              color: C.textSec, letterSpacing: '.12em', textTransform: 'uppercase',
+              color: 'var(--text-sec)', letterSpacing: '.12em', textTransform: 'uppercase',
               pointerEvents: 'none',
             }}>Seguimiento</div>
           )}

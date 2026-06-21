@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AnimatedBackground from '@/components/AnimatedBackground'
 import BackgroundModePicker from '@/components/BackgroundModePicker'
+import ThemeToggle from '@/components/ThemeToggle'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -173,7 +174,10 @@ export default function DocumentosCliente() {
         </span>
         <Link href="/dashboard" style={{ color: 'var(--text-sec)', fontSize: 13 }}>Dashboard</Link>
         <Link href="/clientes/nuevo" style={{ color: 'var(--orange)', fontSize: 13, fontWeight: 600 }}>+ Cliente</Link>
-        <BackgroundModePicker />
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <BackgroundModePicker />
+          <ThemeToggle />
+        </div>
       </nav>
 
       <main style={{ maxWidth: 760, margin: '0 auto', padding: '32px 24px', position: 'relative', zIndex: 1 }}>

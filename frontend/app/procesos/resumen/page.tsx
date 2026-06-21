@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import StepIndicator from '@/components/StepIndicator'
+import ThemeToggle from '@/components/ThemeToggle'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -187,6 +188,9 @@ function ResumenContent() {
         <Link href="/dashboard" style={{ color: 'var(--text-sec)', fontSize: 13 }}>Dashboard</Link>
         <Link href={`/procesos/${clienteId || ''}`} style={{ color: 'var(--text-sec)', fontSize: 13 }}>Procesos</Link>
         <span style={{ color: 'var(--orange)', fontSize: 13, fontWeight: 600 }}>Resumen del proceso</span>
+        <div style={{ marginLeft: 'auto' }}>
+          <ThemeToggle />
+        </div>
       </nav>
 
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px', position: 'relative', zIndex: 1 }}>
@@ -323,6 +327,36 @@ function ResumenContent() {
                   <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--orange)' }}>Ver requisitos →</div>
                 </Link>
               </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+              <Link
+                href="/dashboard"
+                style={{
+                  background: 'var(--orange)',
+                  color: '#fff',
+                  padding: '10px 22px',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                Dashboard
+              </Link>
+              <Link
+                href={`/procesos/${clienteId}`}
+                style={{
+                  border: '1px solid var(--border)',
+                  color: 'var(--text)',
+                  padding: '10px 22px',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                }}
+              >
+                ← Volver a procesos
+              </Link>
             </div>
 
             <div style={{
@@ -526,51 +560,6 @@ function ResumenContent() {
                 </div>
               </details>
             )}
-
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <Link
-                href="/dashboard"
-                style={{
-                  background: 'var(--orange)',
-                  color: '#fff',
-                  padding: '10px 22px',
-                  borderRadius: 6,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-              >
-                Dashboard
-              </Link>
-              <Link
-                href={`/procesos/${clienteId}`}
-                style={{
-                  border: '1px solid var(--border)',
-                  color: 'var(--text)',
-                  padding: '10px 22px',
-                  borderRadius: 6,
-                  fontSize: 14,
-                  textDecoration: 'none',
-                }}
-              >
-                ← Volver a procesos
-              </Link>
-              <a
-                href={construirUrlSecop(proceso)}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-sec)',
-                  padding: '10px 22px',
-                  borderRadius: 6,
-                  fontSize: 14,
-                  textDecoration: 'none',
-                }}
-              >
-                {esUrlSecopDirecta(proceso.url_documento) ? 'Ver en SECOP II ↗' : 'Buscar en SECOP II ↗'}
-              </a>
-            </div>
           </>
         ) : null}
       </main>

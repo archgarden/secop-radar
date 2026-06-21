@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import StepIndicator from '@/components/StepIndicator'
+import ThemeToggle from '@/components/ThemeToggle'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -97,6 +98,9 @@ function PliegoContent() {
         <Link href={`/procesos/${clienteId || ''}`} style={{ color: 'var(--text-sec)', fontSize: 13 }}>Procesos</Link>
         <Link href={`/preseleccion?cliente_id=${clienteId}&proceso_id=${procesoId}`} style={{ color: 'var(--text-sec)', fontSize: 13 }}>Pre-selección</Link>
         <span style={{ color: 'var(--orange)', fontSize: 13, fontWeight: 600 }}>Análisis de pliego</span>
+        <div style={{ marginLeft: 'auto' }}>
+          <ThemeToggle />
+        </div>
       </nav>
 
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '32px 24px', position: 'relative', zIndex: 1 }}>
