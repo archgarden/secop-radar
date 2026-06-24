@@ -2,22 +2,26 @@ import json
 import logging
 import os
 import shutil
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import Base, SessionLocal, engine, get_db
-from models import AnalisisProceso, Cliente, Documento, LogEjecucion, Proceso, ProcesoCliente
+from models import AnalisisProceso, Cliente, Documento, DocumentoProceso, LogEjecucion, Proceso, ProcesoCliente
 from preseleccion import analizar_preseleccion
 from notificaciones import enviar_alerta_nuevos_procesos
 from radar import consultar_contratos_similares, correr_radar
 from analizador_pliego import analizar_pliego
+from secop_scraper import descargar_documentos_proceso
 from extraccion.procesador import procesar_documento, consolidar_perfil
+from unspsc import describir_unspsc, limpiar_unspsc
 from calculadoras import (
     calcular_capacidad_financiera,
     calcular_capacidad_residual,
@@ -84,7 +88,10 @@ app = FastAPI(title="SECOP Radar", version="1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -103,6 +110,23 @@ class ClienteCreate(BaseModel):
     presupuesto_max: int = 0
 
 
+class ClienteUpdate(BaseModel):
+    nombre: str | None = None
+    email: str | None = None
+    departamentos: list[str] | None = None
+    municipio: str | None = None
+    unspsc_codes: list[str] | None = None
+    presupuesto_min: int | None = None
+    presupuesto_max: int | None = None
+    patrimonio_liquido: int | None = None
+    ingresos_anuales: int | None = None
+    experiencia_valor_total: int | None = None
+    experiencia_cantidad: int | None = None
+    indicadores_financieros: list[str] | None = None
+    capacidad_residual_pct: float | None = None
+    contratos_vigentes_valor: int | None = None
+
+
 class ClienteOut(BaseModel):
     id: int
     nombre: str
@@ -112,6 +136,13 @@ class ClienteOut(BaseModel):
     unspsc_codes: str
     presupuesto_min: int
     presupuesto_max: int
+    patrimonio_liquido: int | None
+    ingresos_anuales: int | None
+    experiencia_valor_total: int | None
+    experiencia_cantidad: int | None
+    indicadores_financieros: str | None
+    capacidad_residual_pct: float | None
+    contratos_vigentes_valor: int | None
     activo: bool
 
     class Config:
@@ -128,6 +159,10 @@ class ProcesoOut(BaseModel):
     presupuesto: int
     departamento: str | None
     unspsc_code: str | None
+    unspsc_code_clean: str | None
+    unspsc_descripcion: str | None
+    unspsc_codes: list[str]
+    unspsc_codes_detalle: list[dict[str, str]]
     url_documento: str | None
     estado_proceso: str | None
     modalidad: str | None
@@ -156,6 +191,16 @@ class LogOut(BaseModel):
         from_attributes = True
 
 
+def _parse_json_lista(texto: str | None) -> list[str]:
+    if not texto:
+        return []
+    try:
+        data = json.loads(texto)
+        return [str(x) for x in data] if isinstance(data, list) else []
+    except json.JSONDecodeError:
+        return []
+
+
 def _proceso_to_out(proceso: Proceso, score: int = 0) -> ProcesoOut:
     return ProcesoOut(
         id=proceso.id,
@@ -167,6 +212,13 @@ def _proceso_to_out(proceso: Proceso, score: int = 0) -> ProcesoOut:
         presupuesto=proceso.presupuesto,
         departamento=proceso.departamento,
         unspsc_code=proceso.unspsc_code,
+        unspsc_code_clean=limpiar_unspsc(proceso.unspsc_code),
+        unspsc_descripcion=describir_unspsc(proceso.unspsc_code),
+        unspsc_codes=_parse_json_lista(proceso.unspsc_codes),
+        unspsc_codes_detalle=[
+            {"codigo": c, "descripcion": describir_unspsc(c) or "Categoría no clasificada"}
+            for c in _parse_json_lista(proceso.unspsc_codes)
+        ],
         url_documento=proceso.url_documento,
         estado_proceso=proceso.estado_proceso,
         modalidad=proceso.modalidad,
@@ -221,6 +273,49 @@ def crear_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
             id=job_id,
         )
 
+    # Radar inicial en background para que el cliente vea recomendaciones
+    # inmediatamente después de registrarse, sin esperar al scheduler.
+    def _radar_inicial() -> None:
+        db2 = SessionLocal()
+        try:
+            correr_radar(cliente.id, db2)
+        except Exception as exc:
+            logger.exception("Radar inicial falló para cliente_id=%s: %s", cliente.id, exc)
+        finally:
+            db2.close()
+
+    threading.Thread(target=_radar_inicial, daemon=True).start()
+
+    return cliente
+
+
+@app.put("/clientes/{cliente_id}", response_model=ClienteOut)
+def actualizar_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depends(get_db)):
+    import json
+
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    campos_simples = [
+        "nombre", "email", "municipio", "presupuesto_min", "presupuesto_max",
+        "patrimonio_liquido", "ingresos_anuales", "experiencia_valor_total",
+        "experiencia_cantidad", "capacidad_residual_pct", "contratos_vigentes_valor",
+    ]
+    for campo in campos_simples:
+        valor = getattr(payload, campo, None)
+        if valor is not None:
+            setattr(cliente, campo, valor)
+
+    if payload.departamentos is not None:
+        cliente.departamentos = json.dumps(payload.departamentos)
+    if payload.unspsc_codes is not None:
+        cliente.unspsc_codes = json.dumps(payload.unspsc_codes)
+    if payload.indicadores_financieros is not None:
+        cliente.indicadores_financieros = json.dumps(payload.indicadores_financieros)
+
+    db.commit()
+    db.refresh(cliente)
     return cliente
 
 
@@ -448,6 +543,101 @@ def perfil_cliente(cliente_id: int, db: Session = Depends(get_db)):
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     return consolidar_perfil(cliente_id, db)
+
+
+class RecomendacionOut(BaseModel):
+    perfil_completo: bool
+    departamentos: list[str]
+    unspsc: list[dict]
+    rango_presupuestal: dict
+    modalidad_sugerida: dict | None
+    documentos_recomendados: list[str]
+    pasos_siguientes: list[str]
+
+
+@app.get("/clientes/{cliente_id}/recomendaciones", response_model=RecomendacionOut)
+def recomendaciones_cliente(cliente_id: int, db: Session = Depends(get_db)):
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    import json
+
+    departamentos = _parse_json_lista(cliente.departamentos)
+    unspsc_codes = _parse_json_lista(cliente.unspsc_codes)
+    pmin = cliente.presupuesto_min or 0
+    pmax = cliente.presupuesto_max or 0
+
+    UNSPSC_INFO = {
+        "7214": {"label": "Infraestructura pública", "ejemplos": "vías, puentes, obras civiles"},
+        "7212": {"label": "Edificación", "ejemplos": "escuelas, hospitales, vivienda"},
+        "7215": {"label": "Mantenimiento y reparaciones", "ejemplos": "mantenimiento de edificios e infraestructura"},
+        "8110": {"label": "Servicios de ingeniería y consultoría", "ejemplos": "diseños, interventoría, asesorías"},
+        "7213": {"label": "Construcción especializada", "ejemplos": "obras especiales y técnicas"},
+        "7210": {"label": "Servicios de construcción", "ejemplos": "servicios generales de obra"},
+    }
+
+    unspsc_recs = []
+    for code in unspsc_codes:
+        prefix = code[:4]
+        info = UNSPSC_INFO.get(prefix, {"label": "Categoría UNSPSC", "ejemplos": "procesos relacionados"})
+        unspsc_recs.append({
+            "codigo": code,
+            "label": info["label"],
+            "ejemplos": info["ejemplos"],
+            "sugerencia": f"Buscar procesos de {info['label'].lower()} ({info['ejemplos']}) en los departamentos seleccionados.",
+        })
+
+    modalidad = None
+    if pmax > 0:
+        modalidad = modalidad_recomendada(pmax)
+
+    docs_base = [
+        "RUP vigente (Registro Único de Proponentes)",
+        "Estados financieros con corte del año anterior",
+        "Certificados de experiencia acreditada",
+        "Paz y salvo de parafiscales (SENA, ICBF, Caja de compensación)",
+        "Póliza de seriedad de la oferta",
+    ]
+
+    if any(u.startswith("721") for u in unspsc_codes):
+        docs_base.extend([
+            "Certificado de existencia y representación legal",
+            "Declaración de renta del último año",
+            "Certificado de antecedentes judiciales",
+        ])
+
+    if any(u.startswith("8110") for u in unspsc_codes):
+        docs_base.extend([
+            "Hojas de vida del personal técnico propuesto",
+            "Certificados de estudios y experiencia del profesional responsable",
+        ])
+
+    pasos = [
+        "Completa tu perfil financiero y de experiencia para mejorar el score de pre-selección.",
+        "Sube documentos de soporte (RUP, estados financieros, certificados de experiencia).",
+        "Revisa las oportunidades que el radar encuentra cada 4 horas.",
+        "Analiza el pliego de condiciones antes de presentar propuesta.",
+    ]
+
+    if not departamentos:
+        pasos.insert(0, "Selecciona al menos un departamento de interés en tu perfil.")
+    if not unspsc_codes:
+        pasos.insert(0, "Agrega códigos UNSPSC relacionados con tu actividad económica.")
+
+    perfil_completo = bool(
+        departamentos and unspsc_codes and (pmax > 0 or pmin > 0)
+    )
+
+    return RecomendacionOut(
+        perfil_completo=perfil_completo,
+        departamentos=departamentos,
+        unspsc=unspsc_recs,
+        rango_presupuestal={"min": pmin, "max": pmax},
+        modalidad_sugerida=modalidad,
+        documentos_recomendados=docs_base,
+        pasos_siguientes=pasos,
+    )
 
 
 SMMLV = int(os.getenv("SMMLV", "1423500"))
@@ -695,3 +885,81 @@ def mipyme(payload: MipymeIn):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ---------- Descarga de documentos SECOP II ----------
+
+
+class DocumentoProcesoOut(BaseModel):
+    id: int
+    proceso_id: int
+    nombre: str
+    filename: str
+    path: str
+    url: str | None
+    size_bytes: int
+    es_pliego: bool
+    estado: str
+    fecha_descarga: str
+
+    class Config:
+        from_attributes = True
+
+
+@app.post("/procesos/{proceso_id}/descargar-documentos")
+def descargar_documentos_endpoint(proceso_id: int, db: Session = Depends(get_db)):
+    proceso = db.query(Proceso).filter(Proceso.id == proceso_id).first()
+    if not proceso:
+        raise HTTPException(status_code=404, detail="Proceso no encontrado")
+
+    try:
+        resultado = descargar_documentos_proceso(proceso, db)
+    except Exception as exc:
+        logger.exception("Error descargando documentos: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=502, detail=resultado.get("error"))
+
+    return resultado
+
+
+@app.get("/procesos/{proceso_id}/documentos", response_model=list[DocumentoProcesoOut])
+def listar_documentos_proceso(proceso_id: int, db: Session = Depends(get_db)):
+    proceso = db.query(Proceso).filter(Proceso.id == proceso_id).first()
+    if not proceso:
+        raise HTTPException(status_code=404, detail="Proceso no encontrado")
+
+    docs = db.query(DocumentoProceso).filter(DocumentoProceso.proceso_id == proceso_id).all()
+    return [
+        DocumentoProcesoOut(
+            id=d.id,
+            proceso_id=d.proceso_id,
+            nombre=d.nombre,
+            filename=d.filename,
+            path=d.path,
+            url=d.url,
+            size_bytes=d.size_bytes,
+            es_pliego=d.es_pliego,
+            estado=d.estado,
+            fecha_descarga=d.fecha_descarga.isoformat(),
+        )
+        for d in docs
+    ]
+
+
+@app.get("/documentos-proceso/{documento_id}/download")
+def descargar_documento_proceso(documento_id: int, db: Session = Depends(get_db)):
+    doc = db.query(DocumentoProceso).filter(DocumentoProceso.id == documento_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+    path = Path(doc.path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado en disco")
+
+    return FileResponse(
+        path,
+        filename=doc.filename,
+        media_type="application/octet-stream",
+    )

@@ -45,11 +45,32 @@ interface Contrato {
   urlproceso: string | { url?: string } | null
 }
 
+interface DocumentoProceso {
+  id: number
+  proceso_id: number
+  nombre: string
+  filename: string
+  path: string
+  url: string | null
+  size_bytes: number
+  es_pliego: boolean
+  estado: string
+  fecha_descarga: string
+}
+
 function fmtCOP(n: number) {
   if (!n) return '$0'
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1).replace('.', ',')}B`
   if (n >= 1_000_000) return `$${Math.round(n / 1_000_000)}M`
   return `$${n.toLocaleString('es-CO')}`
+}
+
+function fmtBytes(n: number) {
+  if (!n) return '0 B'
+  if (n >= 1_073_741_824) return `${(n / 1_073_741_824).toFixed(1)} GB`
+  if (n >= 1_048_576) return `${(n / 1_048_576).toFixed(1)} MB`
+  if (n >= 1_024) return `${Math.round(n / 1_024)} KB`
+  return `${n} B`
 }
 
 function esUrlSecopDirecta(url: string | null): boolean {
@@ -121,6 +142,138 @@ function recomendacionPostulacion(proceso: Proceso, restantes: number | null): {
   return { texto: 'REVISAR — Verificar estado en SECOP II', color: 'var(--text-sec)' }
 }
 
+function CaptchaModal({ proceso, onDescargar, onVolver, descargando, mensaje }: {
+  proceso: Proceso
+  onDescargar: () => void
+  onVolver: () => void
+  descargando: boolean
+  mensaje: string
+}) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(0,0,0,.85)',
+      backdropFilter: 'blur(4px)',
+      zIndex: 100,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }}>
+      <div style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderTop: '3px solid var(--orange)',
+        borderRadius: 8,
+        maxWidth: 560,
+        width: '100%',
+        padding: '28px 30px',
+        boxShadow: '0 24px 60px rgba(0,0,0,.7)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: '50%',
+            background: 'rgba(249,115,22,.15)',
+            border: '1px solid rgba(249,115,22,.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 22 }}>🔒</span>
+          </div>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>
+              Verificación de seguridad requerida
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-sec)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+              Paso obligatorio · SECOP II
+            </div>
+          </div>
+        </div>
+
+        <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.7, marginBottom: 16 }}>
+          Para analizar el <strong>pliego de condiciones</strong>, los <strong>anexos</strong> y los <strong>formatos oficiales</strong> de este proceso, SECOP Radar debe descargar los documentos directamente desde el portal de Colombia Compra Eficiente.
+        </div>
+
+        <div style={{
+          background: 'rgba(59,130,246,.08)',
+          border: '1px solid rgba(59,130,246,.25)',
+          borderRadius: 6,
+          padding: '14px 16px',
+          marginBottom: 16,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6', marginBottom: 8 }}>
+            ¿Por qué me piden esto?
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.7 }}>
+            SECOP II protege el acceso a los documentos de los procesos con un CAPTCHA (prueba de seguridad). No hay otra forma legal de obtener el pliego y los anexos reales del proceso. Al completarlo una sola vez por proceso, el sistema puede analizar la información real y darte una recomendación fundamentada.
+          </div>
+        </div>
+
+        <div style={{
+          background: 'var(--bg)',
+          border: '1px solid var(--border)',
+          borderRadius: 6,
+          padding: '12px 16px',
+          marginBottom: 20,
+        }}>
+          <div style={{ fontSize: 11, color: 'var(--text-sec)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>Proceso</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{proceso.entidad}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-sec)', fontFamily: 'monospace', marginTop: 2 }}>{proceso.numero_proceso}</div>
+        </div>
+
+        {mensaje && (
+          <div style={{
+            background: descargando ? 'rgba(245,158,11,.1)' : 'rgba(34,197,94,.1)',
+            border: `1px solid ${descargando ? 'rgba(245,158,11,.35)' : 'rgba(34,197,94,.35)'}`,
+            borderRadius: 6,
+            padding: '12px 16px',
+            marginBottom: 18,
+            fontSize: 12,
+            color: descargando ? '#f59e0b' : 'var(--green)',
+            lineHeight: 1.5,
+          }}>
+            {descargando && <span style={{ marginRight: 8 }}>⏳</span>}{mensaje}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            onClick={onDescargar}
+            disabled={descargando}
+            style={{
+              flex: 1,
+              background: descargando ? 'var(--border)' : 'var(--orange)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              padding: '12px 20px',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: descargando ? 'not-allowed' : 'pointer',
+              minWidth: 200,
+            }}
+          >
+            {descargando ? 'Esperando CAPTCHA...' : '1. Abrir Chrome y resolver CAPTCHA'}
+          </button>
+          <button
+            onClick={onVolver}
+            disabled={descargando}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              color: 'var(--text-sec)',
+              borderRadius: 6,
+              padding: '12px 20px',
+              fontSize: 13,
+              cursor: descargando ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Volver a procesos
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ResumenContent() {
   const searchParams = useSearchParams()
   const clienteId = searchParams.get('cliente_id')
@@ -129,8 +282,12 @@ function ResumenContent() {
   const [proceso, setProceso] = useState<Proceso | null>(null)
   const [modalidad, setModalidad] = useState<{ modalidad: string; descripcion: string } | null>(null)
   const [contratos, setContratos] = useState<Contrato[]>([])
+  const [documentos, setDocumentos] = useState<DocumentoProceso[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [descargando, setDescargando] = useState(false)
+  const [msgDescarga, setMsgDescarga] = useState('')
+  const [mostrarCaptchaModal, setMostrarCaptchaModal] = useState(false)
 
   useEffect(() => {
     if (!clienteId || !procesoId) {
@@ -148,10 +305,18 @@ function ResumenContent() {
         if (!r.ok) throw new Error(await r.text())
         return r.json()
       }),
+      fetch(`${API}/procesos/${procesoId}/documentos`).then(async r => {
+        if (!r.ok) throw new Error(await r.text())
+        return r.json()
+      }),
     ])
-      .then(([data, contratosApi]: [Proceso, Contrato[]]) => {
+      .then(([data, contratosApi, documentosApi]: [Proceso, Contrato[], DocumentoProceso[]]) => {
         setProceso(data)
         setContratos(contratosApi)
+        setDocumentos(documentosApi)
+        if (documentosApi.length === 0 && esUrlSecopDirecta(data.url_documento)) {
+          setMostrarCaptchaModal(true)
+        }
         if (data.presupuesto > 0) {
           fetch(`${API}/modalidad/recomendada/${data.presupuesto}`)
             .then(r => r.json())
@@ -162,6 +327,37 @@ function ResumenContent() {
       .catch(err => { setError(err.message); setLoading(false) })
   }, [clienteId, procesoId])
 
+  async function descargarDocumentos() {
+    if (!procesoId) return
+    setDescargando(true)
+    setMsgDescarga('Se abrió Chrome. Resuelve el CAPTCHA manualmente en la ventana del navegador. Esta operación puede tardar hasta 2 minutos.')
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 130000)
+      const r = await fetch(`${API}/procesos/${procesoId}/descargar-documentos`, {
+        method: 'POST',
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.detail || JSON.stringify(data))
+      setMsgDescarga(`Descarga finalizada: ${data.descargados} documento(s) descargado(s), ${data.errores} error(es).`)
+      const docs = await fetch(`${API}/procesos/${procesoId}/documentos`).then(r => r.json())
+      setDocumentos(docs)
+      if (data.descargados > 0) {
+        setTimeout(() => setMostrarCaptchaModal(false), 1500)
+      }
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setMsgDescarga('La descarga tardó demasiado. Revisa si el CAPTCHA fue resuelto y actualiza la página.')
+      } else {
+        setMsgDescarga(err instanceof Error ? err.message : 'Error al descargar documentos')
+      }
+    } finally {
+      setDescargando(false)
+    }
+  }
+
   const restantes = proceso?.fecha_cierre ? diasRestantes(proceso.fecha_cierre) : null
   const duracion = proceso?.fecha_publicacion && proceso?.fecha_cierre
     ? duracionDias(proceso.fecha_publicacion, proceso.fecha_cierre)
@@ -169,6 +365,15 @@ function ResumenContent() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
+      {proceso && mostrarCaptchaModal && (
+        <CaptchaModal
+          proceso={proceso}
+          onDescargar={descargarDocumentos}
+          onVolver={() => window.location.href = `/procesos/${clienteId}`}
+          descargando={descargando}
+          mensaje={msgDescarga}
+        />
+      )}
       <nav style={{
         background: 'var(--header)',
         borderBottom: '1px solid var(--border)',
@@ -357,6 +562,82 @@ function ResumenContent() {
               >
                 ← Volver a procesos
               </Link>
+            </div>
+
+            {/* Documentos descargados de SECOP II */}
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: 24,
+              marginBottom: 24,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Documentos descargados de SECOP II
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--text-sec)' }}>{documentos.length} documento(s)</span>
+              </div>
+
+              {documentos.length === 0 ? (
+                <div style={{
+                  background: 'var(--bg)',
+                  border: '1px dashed var(--border)',
+                  borderRadius: 6,
+                  padding: '16px 18px',
+                  fontSize: 12,
+                  color: 'var(--text-sec)',
+                  lineHeight: 1.5,
+                }}>
+                  No hay documentos descargados para este proceso.<br />
+                  La descarga automática desde SECOP II está controlada por el scraper (variable <code style={{ color: 'var(--orange)' }}>SCOP_SCRAPER_ENABLED</code> en el backend). Cuando esté habilitada, aquí aparecerán el pliego, anexos y formatos.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {documentos.map(d => (
+                    <div key={d.id} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      background: 'var(--bg)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      padding: '10px 14px',
+                    }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {d.nombre}
+                          {d.es_pliego && (
+                            <span style={{ marginLeft: 8, fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(249,115,22,.15)', color: 'var(--orange)', fontWeight: 700 }}>PLIEGO</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 2 }}>
+                          {fmtBytes(d.size_bytes)} · {d.estado} · {new Date(d.fecha_descarga).toLocaleString('es-CO')}
+                        </div>
+                      </div>
+                      <a
+                        href={`${API}/documentos-proceso/${d.id}/download`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          background: 'rgba(59,130,246,.12)',
+                          border: '1px solid rgba(59,130,246,.3)',
+                          color: '#3b82f6',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: '5px 10px',
+                          borderRadius: 4,
+                          textDecoration: 'none',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Abrir
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={{

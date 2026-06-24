@@ -12,11 +12,22 @@ from docx import Document
 from openpyxl import load_workbook
 from sqlalchemy.orm import Session
 
-from models import AnalisisProceso, Cliente, Documento, Proceso
+from extraccion.ocr import extraer_texto as extraer_texto_ocr
+from extraccion.requisitos_pliego import (
+    extraer_requisitos_estructurados,
+    resumen_requisitos_para_cliente,
+)
+from models import AnalisisProceso, Cliente, Documento, DocumentoProceso, Proceso
+
+# Máximo de páginas a OCR cuando un PDF es escaneado. Evita procesar documentos enormes en el MVP.
+OCR_MAX_PAGES = int(os.getenv("OCR_MAX_PAGES", "50"))
 
 
 def extraer_texto(path: str) -> str:
-    """Extrae texto de PDF, DOCX, XLSX, o ZIP (concatena todo)."""
+    """Extrae texto de PDF, DOCX, XLSX, o ZIP (concatena todo).
+
+    Para PDFs escaneados sin texto nativo, usa OCR con límite de páginas.
+    """
     ext = Path(path).suffix.lower()
 
     if ext == ".pdf":
@@ -44,6 +55,36 @@ def _extraer_pdf(path: str) -> str:
                     textos.append(txt)
     except Exception as exc:
         textos.append(f"[Error leyendo PDF: {exc}]")
+
+    texto_nativo = "\n".join(textos)
+    if texto_nativo.strip():
+        return texto_nativo
+
+    # Si no hay texto nativo, intentar OCR (requiere Tesseract instalado).
+    try:
+        return _extraer_pdf_ocr(path, max_pages=OCR_MAX_PAGES)
+    except Exception as exc:
+        return f"[PDF sin texto nativo y OCR falló: {exc}]"
+
+
+def _extraer_pdf_ocr(path: str, max_pages: int = 20) -> str:
+    """Extrae texto de un PDF escaneado usando OCR, limitado a las primeras páginas."""
+    import fitz  # PyMuPDF
+    import pytesseract
+    from PIL import Image
+
+    textos = []
+    doc = fitz.open(path)
+    total = min(len(doc), max_pages)
+    for i in range(total):
+        page = doc[i]
+        mat = fitz.Matrix(150 / 72, 150 / 72)  # 150 dpi, suficiente para OCR de texto.
+        pix = page.get_pixmap(matrix=mat)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        texto = pytesseract.image_to_string(img, lang="spa")
+        if texto.strip():
+            textos.append(f"--- PAGINA {i + 1} ---\n{texto}")
+    doc.close()
     return "\n".join(textos)
 
 
@@ -238,26 +279,45 @@ def analizar_pliego(proceso_id: int, cliente_id: int, db: Session) -> dict:
 
     documentos_cliente = db.query(Documento).filter(Documento.cliente_id == cliente_id).all()
 
-    # Buscar un documento que parezca ser el pliego: subido por el cliente o con nombre relacionado
+    # Buscar un documento que parezca ser el pliego.
+    # Primero intentamos con documentos descargados automáticamente del proceso.
     pliego_doc = None
-    for doc in documentos_cliente:
-        nombre_norm = normalizar_nombre(doc.nombre)
-        if "pliego" in nombre_norm or "condiciones" in nombre_norm or "terminos" in nombre_norm or "términos" in nombre_norm:
+    pliego_path = None
+    pliego_nombre = None
+
+    docs_proceso = (
+        db.query(DocumentoProceso)
+        .filter(DocumentoProceso.proceso_id == proceso_id, DocumentoProceso.es_pliego == True)
+        .all()
+    )
+    for doc in docs_proceso:
+        if doc.estado == "descargado" and doc.path and Path(doc.path).exists():
             pliego_doc = doc
+            pliego_path = doc.path
+            pliego_nombre = doc.nombre
             break
 
-    if not pliego_doc:
-        # Si no hay pliego subido, no podemos analizar
+    # Si no hay pliego descargado, buscamos entre los documentos subidos por el cliente.
+    if not pliego_path:
+        for doc in documentos_cliente:
+            nombre_norm = normalizar_nombre(doc.nombre)
+            if "pliego" in nombre_norm or "condiciones" in nombre_norm or "terminos" in nombre_norm or "términos" in nombre_norm:
+                pliego_doc = doc
+                pliego_path = doc.path
+                pliego_nombre = doc.nombre
+                break
+
+    if not pliego_path:
         return {
             "proceso_id": proceso_id,
             "cliente_id": cliente_id,
-            "error": "No se encontró un documento identificado como pliego. Suba un documento llamado 'Pliego de condiciones' o similar.",
+            "error": "No se encontró un documento identificado como pliego. Descárguelo automáticamente o súbalo manualmente.",
             "requisitos": [],
             "cumplimiento": [],
             "score_pliego": 0,
         }
 
-    texto_pliego = extraer_texto(pliego_doc.path)
+    texto_pliego = extraer_texto(pliego_path)
     if not texto_pliego.strip():
         return {
             "proceso_id": proceso_id,
@@ -269,6 +329,19 @@ def analizar_pliego(proceso_id: int, cliente_id: int, db: Session) -> dict:
         }
 
     requisitos = detectar_requisitos(texto_pliego)
+
+    # Extraer requisitos cuantitativos estructurados del pliego y anexos.
+    todos_docs_proceso = (
+        db.query(DocumentoProceso)
+        .filter(DocumentoProceso.proceso_id == proceso_id)
+        .all()
+    )
+    requisitos_estructurados = extraer_requisitos_estructurados(
+        texto_pliego,
+        todos_docs_proceso,
+        presupuesto=proceso.presupuesto or 0,
+    )
+    resumen_requisitos = resumen_requisitos_para_cliente(requisitos_estructurados)
 
     cumplimiento = []
     cumplidos = 0
@@ -297,16 +370,20 @@ def analizar_pliego(proceso_id: int, cliente_id: int, db: Session) -> dict:
 
     detalle = json.loads(analisis.detalle or "{}")
     detalle["pliego"] = {
-        "documento_pliego_id": pliego_doc.id,
-        "documento_pliego_nombre": pliego_doc.nombre,
+        "documento_pliego_id": pliego_doc.id if pliego_doc else None,
+        "documento_pliego_nombre": pliego_nombre,
         "cantidad_requisitos": len(requisitos),
         "cantidad_cumplidos": cumplidos,
         "requisitos": requisitos,
     }
+    detalle["requisitos_estructurados"] = requisitos_estructurados
+    detalle["resumen_requisitos"] = resumen_requisitos
 
     analisis.score_pliego = score
     analisis.analisis_pliego = json.dumps({
         "cumplimiento": cumplimiento,
+        "requisitos_estructurados": requisitos_estructurados,
+        "resumen_requisitos": resumen_requisitos,
         "texto_pliego_preview": texto_pliego[:2000],
     })
     analisis.detalle = json.dumps(detalle)
@@ -323,4 +400,6 @@ def analizar_pliego(proceso_id: int, cliente_id: int, db: Session) -> dict:
         "score_pliego": score,
         "requisitos": requisitos,
         "cumplimiento": cumplimiento,
+        "requisitos_estructurados": requisitos_estructurados,
+        "resumen_requisitos": resumen_requisitos,
     }

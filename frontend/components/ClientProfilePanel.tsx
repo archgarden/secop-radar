@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -116,17 +117,26 @@ export default function ClientProfilePanel({ clienteId, compact = false, onLoade
             {!tieneExtraccion && <Badge color="red" label="Sin documentos extraídos" />}
           </div>
         </div>
-        {compact && (
-          <button
-            onClick={() => setExpanded(e => !e)}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Link
+            href={`/clientes/${clienteId}/perfil`}
             style={{
-              background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-sec)',
-              borderRadius: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer',
+              background: 'transparent', border: '1px solid var(--orange)', color: 'var(--orange)',
+              borderRadius: 5, padding: '4px 10px', fontSize: 11, textDecoration: 'none',
             }}
-          >
-            {expanded ? 'Ocultar' : 'Ver perfil'}
-          </button>
-        )}
+          >Editar perfil</Link>
+          {compact && (
+            <button
+              onClick={() => setExpanded(e => !e)}
+              style={{
+                background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-sec)',
+                borderRadius: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer',
+              }}
+            >
+              {expanded ? 'Ocultar' : 'Ver perfil'}
+            </button>
+          )}
+        </div>
       </div>
 
       {expanded && (

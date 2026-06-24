@@ -27,6 +27,17 @@ class Cliente(Base):
     unspsc_codes = Column(Text, nullable=False, default="[]")
     presupuesto_min = Column(Integer, nullable=False, default=0)
     presupuesto_max = Column(Integer, nullable=False, default=0)
+
+    # Datos financieros y de experiencia. Pueden ingresarse manualmente o
+    # extraerse de documentos subidos (consolidar_perfil los mezcla).
+    patrimonio_liquido = Column(Integer, nullable=True)
+    ingresos_anuales = Column(Integer, nullable=True)
+    experiencia_valor_total = Column(Integer, nullable=True)
+    experiencia_cantidad = Column(Integer, nullable=True)
+    indicadores_financieros = Column(Text, nullable=True, default="[]")
+    capacidad_residual_pct = Column(Float, nullable=True)
+    contratos_vigentes_valor = Column(Integer, nullable=True)
+
     activo = Column(Boolean, nullable=False, default=True)
     fecha_creacion = Column(DateTime, nullable=False, default=datetime.utcnow)
 
@@ -49,6 +60,7 @@ class Proceso(Base):
     url_documento = Column(String, nullable=True)
     departamento = Column(String, nullable=True, index=True)
     unspsc_code = Column(String, nullable=True, index=True)
+    unspsc_codes = Column(Text, nullable=False, default="[]")
     fecha_publicacion = Column(DateTime, nullable=True)
     estado_proceso = Column(String, nullable=True, index=True)
     modalidad = Column(String, nullable=True)
@@ -107,6 +119,24 @@ class Documento(Base):
     fecha_subida = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     cliente = relationship("Cliente", back_populates="documentos")
+
+
+class DocumentoProceso(Base):
+    __tablename__ = "documentos_proceso"
+
+    id = Column(Integer, primary_key=True, index=True)
+    proceso_id = Column(Integer, ForeignKey("procesos.id"), nullable=False, index=True)
+    nombre = Column(String, nullable=False)
+    filename = Column(String, nullable=False)
+    path = Column(String, nullable=False)
+    url = Column(String, nullable=True)
+    size_bytes = Column(Integer, nullable=False, default=0)
+    es_pliego = Column(Boolean, nullable=False, default=False)
+    estado = Column(String, nullable=False, default="descargado")
+    error = Column(Text, nullable=True)
+    fecha_descarga = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    proceso = relationship("Proceso", backref="documentos")
 
 
 class AnalisisProceso(Base):

@@ -16,6 +16,10 @@ interface Proceso {
   presupuesto: number
   departamento: string | null
   unspsc_code: string | null
+  unspsc_code_clean: string | null
+  unspsc_descripcion: string | null
+  unspsc_codes: string[]
+  unspsc_codes_detalle: { codigo: string; descripcion: string }[]
   url_documento: string | null
   estado_proceso: string | null
   modalidad: string | null
@@ -196,6 +200,7 @@ export default function ProcesosCliente() {
                   <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>ID / Referencia SECOP II</th>
                   <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>Objeto</th>
                   <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>Depto</th>
+                  <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>UNSPSC</th>
                   <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>Estado</th>
                   <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 500 }}>Presupuesto</th>
                   <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Cierre</th>
@@ -247,6 +252,18 @@ export default function ProcesosCliente() {
                     </td>
                     <td style={{ padding: '10px 14px', color: 'var(--text-sec)', fontSize: 12, whiteSpace: 'nowrap' }}>
                       {p.departamento || '—'}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: 'var(--text-sec)', fontSize: 12, maxWidth: 260 }}>
+                      {p.unspsc_codes_detalle && p.unspsc_codes_detalle.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {p.unspsc_codes_detalle.map((u, idx) => (
+                            <div key={idx}>
+                              <div style={{ fontFamily: 'monospace', color: 'var(--text)', fontWeight: 600 }}>{u.codigo}</div>
+                              <div style={{ fontSize: 10, lineHeight: 1.3, marginTop: 1 }}>{u.descripcion}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : '—'}
                     </td>
                     <td style={{ padding: '10px 14px', color: 'var(--text-sec)', fontSize: 12, whiteSpace: 'nowrap' }}>
                       {p.estado_proceso || '—'}

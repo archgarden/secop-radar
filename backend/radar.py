@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
 from models import Cliente, LogEjecucion, Proceso, ProcesoCliente
+from unspsc import limpiar_unspsc
 
 load_dotenv()
 
@@ -165,6 +166,43 @@ def _calcular_score(
     return score
 
 
+def _extraer_todos_unspsc(reg: dict) -> list[str]:
+    """Extrae todos los códigos UNSPSC del registro Socrata (principal + adicionales)."""
+    codigos: set[str] = set()
+
+    principal = reg.get("codigo_principal_de_categoria")
+    if principal:
+        limpio = limpiar_unspsc(principal)
+        if limpio:
+            codigos.add(limpio)
+
+    adicionales = reg.get("categorias_adicionales")
+    if adicionales and str(adicionales).lower() not in ("no definido", "no aplica", "", "nan", "none"):
+        # Puede venir como lista JSON, separada por comas o punto y coma.
+        texto = str(adicionales)
+        try:
+            items = json.loads(texto)
+            if isinstance(items, list):
+                for item in items:
+                    limpio = limpiar_unspsc(str(item))
+                    if limpio:
+                        codigos.add(limpio)
+        except json.JSONDecodeError:
+            for separador in (";", ","):
+                if separador in texto:
+                    for item in texto.split(separador):
+                        limpio = limpiar_unspsc(item)
+                        if limpio:
+                            codigos.add(limpio)
+                    break
+            else:
+                limpio = limpiar_unspsc(texto)
+                if limpio:
+                    codigos.add(limpio)
+
+    return sorted(codigos)
+
+
 def _registro_a_proceso(reg: dict) -> Proceso | None:
     numero = reg.get("id_del_proceso") or reg.get("numero_de_proceso")
     if not numero:
@@ -187,6 +225,8 @@ def _registro_a_proceso(reg: dict) -> Proceso | None:
     except (ValueError, TypeError):
         duracion = None
 
+    todos_unspsc = _extraer_todos_unspsc(reg)
+
     return Proceso(
         numero_proceso=str(numero),
         referencia_proceso=reg.get("referencia_del_proceso"),
@@ -198,6 +238,7 @@ def _registro_a_proceso(reg: dict) -> Proceso | None:
         url_documento=url,
         departamento=reg.get("departamento_entidad"),
         unspsc_code=reg.get("codigo_principal_de_categoria"),
+        unspsc_codes=json.dumps(todos_unspsc),
         fecha_publicacion=_parse_fecha(reg.get("fecha_de_publicacion_del")),
         estado_proceso=reg.get("estado_del_procedimiento"),
         modalidad=reg.get("modalidad_de_contratacion"),
@@ -243,6 +284,10 @@ def correr_radar(cliente_id: int, db: Session) -> list[Proceso]:
         encontrados = len(registros)
         logger.info("Socrata devolvió %d registros", encontrados)
 
+        # Socrata puede devolver el mismo proceso varias veces; evitamos duplicados
+        # en la relación ProcesoCliente dentro de esta misma ejecución.
+        procesos_matched_esta_ejecucion: set[int] = set()
+
         for reg in registros:
             candidato = _registro_a_proceso(reg)
             if candidato is None:
@@ -263,6 +308,7 @@ def correr_radar(cliente_id: int, db: Session) -> list[Proceso]:
                 existente.fecha_publicacion = candidato.fecha_publicacion or existente.fecha_publicacion
                 existente.departamento = candidato.departamento or existente.departamento
                 existente.unspsc_code = candidato.unspsc_code or existente.unspsc_code
+                existente.unspsc_codes = candidato.unspsc_codes or existente.unspsc_codes
                 existente.estado_proceso = candidato.estado_proceso or existente.estado_proceso
                 existente.modalidad = candidato.modalidad or existente.modalidad
                 existente.fase = candidato.fase or existente.fase
@@ -288,6 +334,9 @@ def correr_radar(cliente_id: int, db: Session) -> list[Proceso]:
                     proceso.entidad,
                 )
 
+            if proceso.id in procesos_matched_esta_ejecucion:
+                continue
+
             ya_matched = (
                 db.query(ProcesoCliente)
                 .filter(
@@ -306,11 +355,39 @@ def correr_radar(cliente_id: int, db: Session) -> list[Proceso]:
                         alertado=False,
                     )
                 )
+                procesos_matched_esta_ejecucion.add(proceso.id)
 
         db.commit()
         logger.info(
             "Radar terminó OK: %d nuevos de %d encontrados", len(nuevos), encontrados
         )
+
+        # Descarga automática de documentos para procesos nuevos (opcional).
+        if os.getenv("SCOP_SCRAPER_ENABLED", "false").lower() in ("true", "1", "yes"):
+            logger.info("Scraper habilitado. Intentando descargar documentos de %d procesos nuevos", len(nuevos))
+            for proceso in nuevos:
+                try:
+                    from secop_scraper import descargar_documentos_proceso
+                    resultado = descargar_documentos_proceso(proceso, db)
+                    if resultado.get("ok"):
+                        logger.info(
+                            "Documentos descargados para %s: %d ok, %d errores",
+                            proceso.numero_proceso,
+                            resultado.get("descargados", 0),
+                            resultado.get("errores", 0),
+                        )
+                    else:
+                        logger.warning(
+                            "No se descargaron documentos de %s: %s",
+                            proceso.numero_proceso,
+                            resultado.get("error"),
+                        )
+                except Exception as exc:
+                    logger.exception(
+                        "Error descargando documentos del proceso %s: %s",
+                        proceso.numero_proceso,
+                        exc,
+                    )
 
     except Exception as exc:
         db.rollback()

@@ -29,6 +29,10 @@ interface ProcesoApi {
   presupuesto: number
   departamento: string | null
   unspsc_code: string | null
+  unspsc_code_clean: string | null
+  unspsc_descripcion: string | null
+  unspsc_codes: string[]
+  unspsc_codes_detalle: { codigo: string; descripcion: string }[]
   url_documento: string | null
   estado_proceso: string | null
   modalidad: string | null
@@ -49,6 +53,23 @@ interface ContratoApi {
   fecha_de_firma: string
   departamento: string
   urlproceso: string
+}
+
+interface RecomendacionUnspscApi {
+  codigo: string
+  label: string
+  ejemplos: string
+  sugerencia: string
+}
+
+interface RecomendacionesApi {
+  perfil_completo: boolean
+  departamentos: string[]
+  unspsc: RecomendacionUnspscApi[]
+  rango_presupuestal: { min: number; max: number }
+  modalidad_sugerida: { modalidad: string; descripcion: string; smmlv: number } | null
+  documentos_recomendados: string[]
+  pasos_siguientes: string[]
 }
 
 function parseCliente(c: ClienteApi) {
@@ -76,7 +97,9 @@ function tipoProceso(prefix: string) {
 }
 
 function mapearProceso(p: ProcesoApi, cliente: ReturnType<typeof parseCliente>): ProcesoData {
-  const unspscPrefix = p.unspsc_code ? p.unspsc_code.replace('V1.', '').slice(0, 4) : ''
+  const unspscClean = p.unspsc_code_clean || (p.unspsc_code ? p.unspsc_code.replace(/^V1\.?/, '').slice(0, 8) : '')
+  const unspscPrefix = unspscClean.slice(0, 4)
+  const unspscDescripcion = p.unspsc_descripcion || labelUNSPSC(unspscPrefix)
   const cierre = p.fecha_cierre
     ? new Date(p.fecha_cierre).toISOString()
     : new Date(Date.now() + 30 * 86400000).toISOString()
@@ -98,6 +121,10 @@ function mapearProceso(p: ProcesoApi, cliente: ReturnType<typeof parseCliente>):
     modalidad: p.modalidad,
     departamento: p.departamento || '—',
     unspsc: unspscPrefix,
+    unspscClean,
+    unspscDescripcion,
+    unspscCodes: p.unspsc_codes || [unspscClean].filter(Boolean),
+    unspscCodesDetalle: p.unspsc_codes_detalle || [],
     unspscLabel: labelUNSPSC(unspscPrefix),
     tipo: tipoProceso(unspscPrefix),
     sector: 'Infrastructure',
@@ -126,6 +153,10 @@ interface ProcesoData {
   modalidad: string | null
   departamento: string
   unspsc: string
+  unspscClean: string
+  unspscDescripcion: string
+  unspscCodes: string[]
+  unspscCodesDetalle: { codigo: string; descripcion: string }[]
   unspscLabel: string
   tipo: string
   sector: string
@@ -624,8 +655,8 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         }}>{p.objeto}</p>
 
-        {/* Estado / modalidad / publicación */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        {/* Estado / modalidad / UNSPSC / publicación */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
           {p.estado && (
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: p.estado === 'Publicado' ? 'var(--green)' : 'var(--text-sec)', border: `1px solid ${p.estado === 'Publicado' ? 'var(--green)' : 'var(--border)'}`, padding: '2px 7px', borderRadius: 3 }}>
               {p.estado}
@@ -636,12 +667,27 @@ function ProcesoCard({ p, onClick, active, clienteId }: { p: ProcesoData; onClic
               {p.modalidad}
             </span>
           )}
+          {p.unspscClean && (
+            <span title={p.unspscDescripcion} style={{ fontSize: 9, color: 'var(--orange)', border: '1px solid rgba(249,115,22,.35)', padding: '2px 7px', borderRadius: 3, fontWeight: 600, letterSpacing: '.04em' }}>
+              UNSPSC {p.unspscClean}
+            </span>
+          )}
+          {p.unspscCodes.length > 1 && (
+            <span style={{ fontSize: 9, color: 'var(--text-sec)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: 3 }}>
+              +{p.unspscCodes.length - 1} códigos
+            </span>
+          )}
           {p.fechaPublicacion && (
             <span style={{ fontSize: 9, color: 'var(--text-sec)' }}>
               Publicado {new Date(p.fechaPublicacion).toLocaleDateString('es-CO')}
             </span>
           )}
         </div>
+        {p.unspscDescripcion && (
+          <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: -8, marginBottom: 10, lineHeight: 1.4 }}>
+            {p.unspscDescripcion}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -1156,6 +1202,125 @@ function ProposalTracker({ proceso, cliente, contratos }: { proceso: ProcesoData
   )
 }
 
+/* ─── Panel de recomendaciones basado en perfil ─────── */
+function RecomendacionesPanel({ rec, onBuscar, buscando }: { rec: RecomendacionesApi; onBuscar: () => void; buscando: boolean }) {
+  return (
+    <div style={{
+      background: 'var(--card)',
+      border: '1px solid var(--border)',
+      borderRadius: 8,
+      padding: '22px 24px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 18,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
+            Recomendaciones para tu perfil
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-sec)', lineHeight: 1.5 }}>
+            Basadas en los códigos UNSPSC, departamentos y presupuesto que registraste. No necesitas documentos subidos para empezar a ver oportunidades.
+          </div>
+        </div>
+        <button
+          onClick={onBuscar}
+          disabled={buscando}
+          style={{
+            background: buscando ? 'var(--border)' : 'var(--orange)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 6,
+            padding: '10px 20px',
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: buscando ? 'not-allowed' : 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {buscando ? 'Buscando...' : 'Buscar oportunidades ahora'}
+        </button>
+      </div>
+
+      {!rec.perfil_completo && (
+        <div style={{
+          background: 'rgba(245,158,11,.1)',
+          border: '1px solid rgba(245,158,11,.35)',
+          borderRadius: 6,
+          padding: '10px 14px',
+          fontSize: 12,
+          color: '#f59e0b',
+        }}>
+          ⚠ Tu perfil aún está incompleto. Completa departamentos, códigos UNSPSC y rango presupuestal para recibir mejores recomendaciones.
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+        {/* UNSPSC */}
+        <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 14 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Códigos UNSPSC seleccionados</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {rec.unspsc.map(u => (
+              <div key={u.codigo}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--blue)' }}>{u.codigo} · {u.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 2 }}>{u.sugerencia}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Departamentos + presupuesto */}
+        <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 14 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Zona y presupuesto</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
+            {rec.departamentos.length > 0 ? rec.departamentos.map(d => (
+              <span key={d} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, background: 'rgba(34,197,94,.12)', color: 'var(--green)', fontWeight: 500 }}>{d}</span>
+            )) : <span style={{ fontSize: 11, color: 'var(--text-sec)' }}>Sin departamentos definidos</span>}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text)', marginBottom: 6 }}>
+            Rango: <span style={{ fontWeight: 700, color: 'var(--orange)' }}>{fmtCOP(rec.rango_presupuestal.min)} – {rec.rango_presupuestal.max ? fmtCOP(rec.rango_presupuestal.max) : 'Sin límite'}</span>
+          </div>
+          {rec.modalidad_sugerida && (
+            <div style={{ fontSize: 11, color: 'var(--text-sec)', lineHeight: 1.5 }}>
+              Modalidad sugerida: <span style={{ color: '#3b82f6', fontWeight: 600 }}>{rec.modalidad_sugerida.modalidad}</span><br />
+              {rec.modalidad_sugerida.descripcion}
+            </div>
+          )}
+        </div>
+
+        {/* Documentos recomendados */}
+        <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 14 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Documentos recomendados</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {rec.documentos_recomendados.map((doc, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <span style={{ color: 'var(--orange)', fontSize: 12, lineHeight: 1.4 }}>•</span>
+                <span style={{ fontSize: 11, color: 'var(--text)', lineHeight: 1.4 }}>{doc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Pasos siguientes */}
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 14 }}>
+        <div style={{ fontSize: 10, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Próximos pasos sugeridos</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {rec.pasos_siguientes.map((paso, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <span style={{
+                width: 18, height: 18, borderRadius: '50%', background: 'rgba(249,115,22,.15)', color: 'var(--orange)',
+                fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>{i + 1}</span>
+              <span style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.4 }}>{paso}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─── PÁGINA (Dashboard) ────────────────── */
 export default function Dashboard() {
   const clock = useClock()
@@ -1169,8 +1334,10 @@ export default function Dashboard() {
   const [cliente, setCliente] = useState<ClienteApi | null>(null)
   const [procesos, setProcesos] = useState<ProcesoData[]>([])
   const [contratos, setContratos] = useState<ContratoApi[]>([])
+  const [recomendaciones, setRecomendaciones] = useState<RecomendacionesApi | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [radarLoading, setRadarLoading] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -1187,15 +1354,35 @@ export default function Dashboard() {
         return Promise.all([
           fetch(`${API}/clientes/${c.id}/procesos`).then(r => r.json()),
           fetch(`${API}/clientes/${c.id}/contratos-similares`).then(r => r.json()),
-        ]).then(([procesosApi, contratosApi]) => {
+          fetch(`${API}/clientes/${c.id}/recomendaciones`).then(r => r.json()),
+        ]).then(([procesosApi, contratosApi, recomendacionesApi]) => {
           const mapped = (procesosApi as ProcesoApi[]).map(p => mapearProceso(p, parsed))
           setProcesos(mapped.sort((a, b) => (b.score || 0) - (a.score || 0)))
           setContratos(contratosApi as ContratoApi[])
+          setRecomendaciones(recomendacionesApi as RecomendacionesApi)
           setLoading(false)
         })
       })
       .catch(err => { setError(err.message); setLoading(false) })
   }, [])
+
+  async function correrRadarManual() {
+    if (!cliente) return
+    setRadarLoading(true)
+    try {
+      const r = await fetch(`${API}/radar/correr/${cliente.id}`, { method: 'POST' })
+      if (!r.ok) throw new Error(await r.text())
+      const parsed = parseCliente(cliente)
+      const procesosApi = await fetch(`${API}/clientes/${cliente.id}/procesos`).then(r => r.json())
+      const mapped = (procesosApi as ProcesoApi[]).map(p => mapearProceso(p, parsed))
+      setProcesos(mapped.sort((a, b) => (b.score || 0) - (a.score || 0)))
+      if (mapped.length > 0) setActiveId(mapped[0].id)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al correr radar')
+    } finally {
+      setRadarLoading(false)
+    }
+  }
 
   const cTotal = useCounter(procesos.length)
   const presupuestoTotal = procesos.reduce((a, p) => a + p.presupuesto, 0)
@@ -1423,8 +1610,8 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* ─ Grid de cards ─ */}
-          {!loading && !error && (
+          {/* ─ Grid de cards / recomendaciones ─ */}
+          {!loading && !error && procesados.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               {procesados.map((p, i) => (
                 <div key={p.id} className="row-enter" style={{ animationDelay: `${i * 60}ms` }}>
@@ -1432,6 +1619,10 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+          )}
+
+          {!loading && !error && procesados.length === 0 && recomendaciones && (
+            <RecomendacionesPanel rec={recomendaciones} onBuscar={correrRadarManual} buscando={radarLoading} />
           )}
         </div>
 

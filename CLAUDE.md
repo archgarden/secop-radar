@@ -31,7 +31,13 @@ secop-radar/
 ├── backend/
 │   ├── main.py
 │   ├── radar.py
-│   ├── downloader.py
+│   ├── secop_scraper.py
+│   ├── analizador_pliego.py
+│   ├── preseleccion.py
+│   ├── piloto.py
+│   ├── nopecha_test/
+│   │   ├── descargar_documentos_secop.py
+│   │   └── nopecha_ext/
 │   ├── notificaciones.py
 │   ├── models.py
 │   ├── database.py
@@ -45,7 +51,8 @@ secop-radar/
 │   ├── components/
 │   └── .env.local
 ├── storage/
-│   └── pliegos/
+│   ├── pliegos/
+│   └── procesos/
 ├── logs/
 └── CLAUDE.md
 
@@ -54,6 +61,19 @@ SOCRATA_APP_TOKEN=tu_token_aqui
 RESEND_API_KEY=tu_key_aqui
 DATABASE_URL=sqlite:///./secop.db
 STORAGE_PATH=../storage/pliegos
+
+# Scraper de documentos SECOP II (Playwright + CAPTCHA solver)
+SCOP_SCRAPER_ENABLED=false
+SCOP_SCRAPER_TIMEOUT=120
+SCOP_SCRAPER_STORAGE=../storage/procesos
+
+# Solucionador de CAPTCHA: manual | 2captcha | nopecha
+CAPTCHA_SOLVER=manual
+CAPTCHA_API_KEY=tu_key_aqui
+
+# OCR de pliegos escaneados (requiere Tesseract instalado)
+TESSERACT_CMD=/opt/homebrew/bin/tesseract
+OCR_MAX_PAGES=50
 
 ## API principal
 - Socrata SECOP II: https://www.datos.gov.co/resource/p6dx-8zbt.json

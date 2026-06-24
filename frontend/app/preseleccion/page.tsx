@@ -44,15 +44,89 @@ interface AnalisisDetalle {
   documentos_faltantes: string[]
 }
 
+interface EvalEstructurada {
+  experiencia?: {
+    min_contratos_requerido?: number
+    contratos_cliente?: number
+    valor_minimo_requerido?: number
+    valor_experiencia_cliente?: number
+    score?: number
+  }
+  capacidad_financiera?: {
+    patrimonio_minimo_requerido?: number
+    patrimonio_cliente?: number
+    indicadores_requeridos?: string[]
+    indicadores_cliente?: string[]
+    indicadores_cumplidos?: number
+    score?: number
+  }
+  capacidad_residual?: {
+    min_crp_pct_requerido?: number
+    crp_cliente?: number
+    score?: number
+  }
+}
+
+interface AnalisisPliegoData {
+  requisitos_estructurados?: {
+    experiencia?: {
+      min_contratos?: number
+      max_contratos?: number
+      tipos_obra?: string[]
+      valor_minimo_po_pct?: number
+      valor_minimo_cop?: number
+      matriz1?: {
+        actividad?: string
+        experiencia_general?: string
+        experiencia_especifica?: string
+      }
+    }
+    capacidad_financiera?: {
+      patrimonio_minimo_po_pct?: number
+      patrimonio_minimo_cop?: number
+      indicadores_requeridos?: string[]
+      matriz2?: {
+        resumen?: Record<string, Record<string, { valor_minimo?: number; texto?: string }>>
+      }
+    }
+    capacidad_residual?: {
+      requerida?: boolean
+      formula_crpc_corto_plazo?: string
+      formula_crpc_largo_plazo?: string
+      requisito_crp_crpc?: string
+      factores?: { nombre: string; codigo: string; puntaje_maximo: number }[]
+      min_crp_pct?: number
+    }
+  }
+  resumen_requisitos?: { campo: string; requerido: any; detalle?: any }[]
+}
+
 interface Analisis {
   id: number
   proceso_id: number
   cliente_id: number
   score_preseleccion: number
+  score_pliego: number
   recomendacion: string
   faltantes: string[]
   riesgos: string[]
-  detalle: AnalisisDetalle
+  detalle: AnalisisDetalle & {
+    score_pliego_documental?: number
+    score_pliego_estructurado?: number
+    evaluacion_requisitos_estructurados?: EvalEstructurada
+    cliente?: {
+      perfil_financiero?: {
+        patrimonio_liquido?: number
+        ingresos_anuales?: number
+        experiencia_valor_total?: number
+        experiencia_cantidad?: number
+        indicadores_financieros?: string[]
+        capacidad_residual_pct?: number
+        contratos_vigentes_valor?: number
+      }
+    }
+  }
+  analisis_pliego: AnalisisPliegoData
   fecha_analisis: string
 }
 
@@ -206,6 +280,132 @@ function PreseleccionContent() {
                 <Info label="Objeto" value={analisis.detalle.proceso.objeto || '—'} />
               </div>
             </div>
+
+            {/* ── Análisis estructurado del pliego ── */}
+            {analisis.analisis_pliego?.requisitos_estructurados && (
+              <div style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: 24,
+                marginBottom: 24,
+              }}>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 16 }}>
+                  Análisis estructurado del pliego
+                </div>
+
+                {/* Score del pliego desglosado */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
+                  <ScoreBox label="Score pliego" value={analisis.score_pliego} />
+                  <ScoreBox label="Documental" value={analisis.detalle.score_pliego_documental ?? 0} />
+                  <ScoreBox label="Estructurado" value={analisis.detalle.score_pliego_estructurado ?? 0} />
+                </div>
+
+                {/* Experiencia */}
+                {analisis.analisis_pliego.requisitos_estructurados.experiencia && (
+                  <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 16, marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--orange)', marginBottom: 10 }}>Experiencia requerida</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 12 }}>
+                      <Info label="Contratos mínimos" value={`${analisis.analisis_pliego.requisitos_estructurados.experiencia.min_contratos ?? '—'}`} />
+                      <Info label="Contratos del cliente" value={`${analisis.detalle.cliente?.perfil_financiero?.experiencia_cantidad ?? 0}`} />
+                      <Info label="Valor mínimo requerido" value={fmtCOP(analisis.analisis_pliego.requisitos_estructurados.experiencia.valor_minimo_cop ?? 0)} />
+                      <Info label="Experiencia del cliente" value={fmtCOP(analisis.detalle.cliente?.perfil_financiero?.experiencia_valor_total ?? 0)} />
+                    </div>
+                    {analisis.analisis_pliego.requisitos_estructurados.experiencia.tipos_obra && (
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-sec)', marginBottom: 4 }}>TIPOS DE OBRA ACEPTADOS</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {analisis.analisis_pliego.requisitos_estructurados.experiencia.tipos_obra.map((t, i) => (
+                            <span key={i} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 3, background: 'rgba(59,130,246,.12)', color: '#3b82f6' }}>{t}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {analisis.analisis_pliego.requisitos_estructurados.experiencia.matriz1 && (
+                      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-sec)', lineHeight: 1.5 }}>
+                        <strong>Matriz 1:</strong> {analisis.analisis_pliego.requisitos_estructurados.experiencia.matriz1.actividad}<br/>
+                        {analisis.analisis_pliego.requisitos_estructurados.experiencia.matriz1.experiencia_general}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Capacidad financiera */}
+                {analisis.analisis_pliego.requisitos_estructurados.capacidad_financiera && (
+                  <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 16, marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--orange)', marginBottom: 10 }}>Capacidad financiera</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 12 }}>
+                      <Info label="Patrimonio mínimo requerido" value={fmtCOP(analisis.analisis_pliego.requisitos_estructurados.capacidad_financiera.patrimonio_minimo_cop ?? 0)} />
+                      <Info label="Patrimonio del cliente" value={fmtCOP(analisis.detalle.cliente?.perfil_financiero?.patrimonio_liquido ?? 0)} />
+                    </div>
+                    {analisis.analisis_pliego.requisitos_estructurados.capacidad_financiera.indicadores_requeridos && (
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-sec)', marginBottom: 4 }}>INDICADORES REQUERIDOS</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {analisis.analisis_pliego.requisitos_estructurados.capacidad_financiera.indicadores_requeridos.map((ind, i) => {
+                            const clienteTiene = analisis.detalle.cliente?.perfil_financiero?.indicadores_financieros?.includes(ind) ?? false
+                            return (
+                              <span key={i} style={{
+                                fontSize: 10, padding: '3px 8px', borderRadius: 3,
+                                background: clienteTiene ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.1)',
+                                color: clienteTiene ? 'var(--green)' : 'var(--red)',
+                              }}>
+                                {clienteTiene ? '✓' : '✕'} {ind}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {analisis.analisis_pliego.requisitos_estructurados.capacidad_financiera.matriz2?.resumen && (
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-sec)', marginBottom: 4 }}>MATRIZ 2 — VALORES CONCERTADOS</div>
+                        {Object.entries(analisis.analisis_pliego.requisitos_estructurados.capacidad_financiera.matriz2.resumen).map(([perfil, cats]) => (
+                          <div key={perfil} style={{ marginBottom: 8 }}>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text)', textTransform: 'uppercase' }}>{perfil}</div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {Object.entries(cats).map(([cat, val]) => (
+                                <span key={cat} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 3, background: 'var(--surface)', color: 'var(--text-sec)' }}>
+                                  {cat}: {val.texto || val.valor_minimo}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Capacidad residual */}
+                {analisis.analisis_pliego.requisitos_estructurados.capacidad_residual?.requerida && (
+                  <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--orange)', marginBottom: 10 }}>Capacidad residual</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 12, marginBottom: 10 }}>
+                      <Info label="CRP del cliente" value={`${analisis.detalle.cliente?.perfil_financiero?.capacidad_residual_pct ?? 0}%`} />
+                      <Info label="CRP mínimo requerido" value={`${analisis.analisis_pliego.requisitos_estructurados.capacidad_residual.min_crp_pct ?? 'No determinado'}%`} />
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-sec)', lineHeight: 1.6 }}>
+                      {analisis.analisis_pliego.requisitos_estructurados.capacidad_residual.formula_crpc_corto_plazo && <div>• {analisis.analisis_pliego.requisitos_estructurados.capacidad_residual.formula_crpc_corto_plazo}</div>}
+                      {analisis.analisis_pliego.requisitos_estructurados.capacidad_residual.formula_crpc_largo_plazo && <div>• {analisis.analisis_pliego.requisitos_estructurados.capacidad_residual.formula_crpc_largo_plazo}</div>}
+                      {analisis.analisis_pliego.requisitos_estructurados.capacidad_residual.requisito_crp_crpc && <div>• {analisis.analisis_pliego.requisitos_estructurados.capacidad_residual.requisito_crp_crpc}</div>}
+                    </div>
+                    {analisis.analisis_pliego.requisitos_estructurados.capacidad_residual.factores && (
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-sec)', marginBottom: 4 }}>FACTORES / PUNTAJE MÁXIMO</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {analisis.analisis_pliego.requisitos_estructurados.capacidad_residual.factores.map((f, i) => (
+                            <span key={i} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 3, background: 'rgba(245,158,11,.12)', color: 'var(--yellow)' }}>
+                              {f.codigo}: {f.puntaje_maximo}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {clienteId && (
               <div style={{ marginBottom: 24 }}>
@@ -420,6 +620,16 @@ function DocStat({ label, value, color }: { label: string; value: number; color:
   return (
     <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 14, textAlign: 'center' }}>
       <div style={{ fontSize: 22, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
+      <div style={{ fontSize: 10, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+    </div>
+  )
+}
+
+function ScoreBox({ label, value }: { label: string; value: number }) {
+  const col = value >= 80 ? 'var(--green)' : value >= 50 ? '#facc15' : 'var(--red)'
+  return (
+    <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 14, textAlign: 'center' }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: col, marginBottom: 4 }}>{value}%</div>
       <div style={{ fontSize: 10, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
     </div>
   )
