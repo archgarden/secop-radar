@@ -97,6 +97,14 @@ def consolidar_perfil(cliente_id: int, db: Session) -> dict[str, Any]:
             if extraccion.get("ingresos"):
                 perfil["ingresos"] = extraccion["ingresos"]
                 perfil["fuentes"]["ingresos"] = doc.filename
+            if extraccion.get("indicadores_calculados"):
+                # Fusionar indicadores calculados del documento con los existentes.
+                actuales = perfil.get("indicadores_financieros") or {}
+                if isinstance(actuales, list):
+                    actuales = {k: True for k in actuales}
+                actuales.update(extraccion["indicadores_calculados"])
+                perfil["indicadores_financieros"] = actuales
+                perfil["fuentes"]["indicadores_financieros"] = doc.filename
 
         elif tipo == "certificado_experiencia":
             if extraccion.get("valor"):

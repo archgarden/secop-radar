@@ -227,11 +227,21 @@ Los 14 procesos originales de la muestra tenían `url_documento` apuntando al lo
     - 13 documentos del proponente ahora son obligatorios (>70% de los procesos).
     - 4 documentos del proponente son frecuentes (30–70%).
     - 3 documentos del proponente quedan como "según pliego".
+  - [x] Mejorada la extracción automática de **estados financieros** del cliente:
+    - Script: `backend/extraccion/extractores.py`.
+    - Soporta formatos colombianos: `$2.000.000.000`, `2.000.000.000,00`, cifras en millones/miles, espacios como separadores de miles.
+    - Detecta y parsea correctamente "cifras en millones de pesos" aplicando el multiplicador global.
+    - Búsqueda robusta en tablas: busca el valor en la misma línea de la etiqueta o en las siguientes 3 líneas.
+    - Nuevos campos extraídos: activo corriente, pasivo corriente, activo total, pasivo total, utilidad operacional, utilidad neta, gastos financieros/intereses, efectivo, cuentas por cobrar, inventarios, proveedores.
+    - Calcula indicadores financieros automáticamente: liquidez, endeudamiento, cobertura de intereses, rentabilidad del patrimonio, rentabilidad del activo.
+    - Detección por nombre ampliada: estados financieros, balance, situación financiera, estado de resultados, declaración de renta, carga tributaria.
+    - Los indicadores calculados se consolidan en el perfil del cliente (`backend/extraccion/procesador.py`).
+    - Validado con documentos de prueba (DOCX): confianza 1.0 en casos completos y extracción correcta del caso piloto (patrimonio $2.000M, ingresos $10.000M).
 
 ### ⏳ Pendiente
 
 - [ ] Mejorar la UX del panel del Core (filtros ya existen; se puede agregar exportación o vista de auditoría).
-- [ ] Refinar detección de documentos poco frecuentes pero relevantes: declaración de renta, certificación de no intervención / inhabilidades.
+- [ ] Refinar detección de documentos poco frecuentes pero relevantes: certificación de no intervención / inhabilidades.
 
 ### 🚧 Bloqueo resuelto
 
@@ -355,11 +365,9 @@ TESSERACT_CMD=/opt/homebrew/bin/tesseract python consolidar_core_documentos.py -
 
 ## 7. Próxima acción sugerida
 
-1. **Actualizar la documentación del producto** (README/CLAUDE.md) con la nueva funcionalidad del Core, checklist de documentos y guía de instalación de certificados SSL.
-2. **Mejorar la extracción automática de estados financieros** para que el perfil del cliente se complete sin intervención manual (hoy extrae el texto pero no siempre los números).
-3. **Refinar la detección de matrices**: muchas Matriz 1 y Matriz 2 no se encontraron por nombre de archivo; revisar si usan otros nombres (ej. `FORMATOS.xlsx`, `Anexo_*.xlsx`) o si no están en los documentos descargados.
-4. **Refinar detección de documentos poco frecuentes** si el negocio lo requiere:
-   - Declaración de renta / carga tributaria.
+1. **Refinar la detección de matrices**: muchas Matriz 1 y Matriz 2 no se encontraron por nombre de archivo; revisar si usan otros nombres (ej. `FORMATOS.xlsx`, `Anexo_*.xlsx`) o si no están en los documentos descargados.
+2. **Actualizar la documentación del producto** (README/CLAUDE.md) con la nueva funcionalidad del Core, checklist de documentos y guía de instalación de certificados SSL.
+3. **Refinar detección de documentos poco frecuentes** si el negocio lo requiere:
    - Certificación de no intervención / inhabilidades.
-5. **Agregar exportación o vista de auditoría** del Core (por ejemplo, descargar CSV desde el panel o ver qué pliegos requieren cada documento).
-6. **Preparar entorno de producción**: instalar certificados en el deploy (Railway/Vercel) y confirmar flujo de CAPTCHA manual para descargas de documentos.
+4. **Agregar exportación o vista de auditoría** del Core (por ejemplo, descargar CSV desde el panel o ver qué pliegos requieren cada documento).
+5. **Preparar entorno de producción**: instalar certificados en el deploy (Railway/Vercel) y confirmar flujo de CAPTCHA manual para descargas de documentos.

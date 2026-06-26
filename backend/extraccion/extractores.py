@@ -3,15 +3,20 @@
 import json
 import re
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from .ocr import extraer_texto, normalizar_texto
 
 
 def _buscar_etiqueta_linea(texto: str, etiquetas: list[str]) -> str | None:
-    """Busca una etiqueta en el texto y devuelve el valor que sigue en la misma línea."""
+    """Busca una etiqueta en el texto y devuelve el valor que sigue en la misma línea.
+
+    Busca primero las etiquetas más largas para evitar cortes parciales
+    (por ejemplo, "patrimonio liquido" antes que "patrimonio").
+    """
     lineas = texto.split("\n")
-    for etiqueta in etiquetas:
+    for etiqueta in sorted(etiquetas, key=len, reverse=True):
         patron = re.compile(rf"\b{re.escape(etiqueta)}\b", re.IGNORECASE)
         for linea in lineas:
             if patron.search(linea):
@@ -46,7 +51,7 @@ def _buscar_valor_despues(texto: str, etiquetas: list[str]) -> str | None:
     """Busca etiqueta y devuelve la siguiente línea no vacía si no hay valor en la misma."""
     lineas = [l.strip() for l in texto.split("\n") if l.strip()]
     for i, linea in enumerate(lineas):
-        for etiqueta in etiquetas:
+        for etiqueta in sorted(etiquetas, key=len, reverse=True):
             if re.search(rf"\b{re.escape(etiqueta)}\b", linea, re.IGNORECASE):
                 # Si la línea tiene valor, usarla
                 resto = re.sub(rf"^.*?\b{re.escape(etiqueta)}\b", "", linea, flags=re.IGNORECASE)
@@ -56,6 +61,31 @@ def _buscar_valor_despues(texto: str, etiquetas: list[str]) -> str | None:
                 # Si no, mirar la siguiente línea
                 if i + 1 < len(lineas):
                     return lineas[i + 1]
+    return None
+
+
+def _buscar_valor_tabla(texto: str, etiquetas: list[str], max_lineas_siguientes: int = 3) -> str | None:
+    """Busca una etiqueta y devuelve el primer valor monetario textual válido cercano.
+
+    Útil para estados financieros en formato tabla, donde el valor puede estar
+    en la misma línea de la etiqueta o en líneas siguientes. Devuelve el texto
+    del valor para que el llamador decida el redondeo/multiplicador final.
+    """
+    lineas = [l.strip() for l in texto.split("\n") if l.strip()]
+    for i, linea in enumerate(lineas):
+        for etiqueta in sorted(etiquetas, key=len, reverse=True):
+            if re.search(rf"\b{re.escape(etiqueta)}\b", linea, re.IGNORECASE):
+                # Buscar en la línea actual y en las siguientes.
+                for j in range(i, min(i + 1 + max_lineas_siguientes, len(lineas))):
+                    candidata = lineas[j]
+                    # Si estamos en la línea de la etiqueta, quitar la etiqueta.
+                    if j == i:
+                        candidata = re.sub(rf"^.*?\b{re.escape(etiqueta)}\b", "", candidata, flags=re.IGNORECASE).strip()
+                    # Buscar todos los valores monetarios en la línea.
+                    valores = re.findall(r"[$]?\s*[\d.,\s]+(?:millones?|miles?)?", candidata, flags=re.IGNORECASE)
+                    for val in valores:
+                        if _limpiar_valor_monetario(val) is not None:
+                            return val
     return None
 
 
@@ -121,25 +151,101 @@ def _extraer_lista_departamentos(valor: str | None) -> list[str]:
     return [i.title() for i in items]
 
 
-def _limpiar_valor_monetario(valor: str | None) -> int | None:
+def _parse_valor_monetario(valor: str | None) -> tuple[Decimal | None, int]:
+    """Parsea una cadena monetaria y devuelve (numero, multiplicador_palabra).
+
+    Soporta formatos comunes en documentos colombianos:
+      - $2.000.000.000
+      - $2,000,000,000
+      - 2.000.000.000,00
+      - 2 000 000 000
+      - 2.000 millones
+      - COP 2.000.000.000
+
+    No redondea; el llamador decide cuándo hacerlo.
+    """
     if not valor:
+        return None, 1
+
+    texto = str(valor).strip()
+
+    # Detectar multiplicadores explícitos (millones / miles).
+    multiplicador = 1
+    texto_lower = texto.lower()
+    if "millones" in texto_lower or "millon" in texto_lower:
+        multiplicador = 1_000_000
+        texto = re.sub(r"millones?", "", texto, flags=re.IGNORECASE)
+    elif "miles" in texto_lower or "mil" in texto_lower:
+        multiplicador = 1_000
+        texto = re.sub(r"mil(?:es)?", "", texto, flags=re.IGNORECASE)
+
+    # Quitar prefijos monetarios y símbolos que no sean dígitos, puntos, comas o espacios.
+    texto = re.sub(r"[^\d,\.\s]", "", texto)
+    texto = texto.strip()
+    if not texto:
+        return None, multiplicador
+
+    # Normalizar: punto o coma como separador de miles vs decimal.
+    def _parse_number_raw(s: str) -> Decimal | None:
+        # Caso 1: ambos separadores presentes -> convención latina (miles=., decimal=,)
+        if "," in s and "." in s:
+            ultimo_punto = s.rfind(".")
+            ultima_coma = s.rfind(",")
+            if ultima_coma > ultimo_punto:
+                s = s.replace(".", "").replace(",", ".")
+            else:
+                s = s.replace(",", "")
+            try:
+                return Decimal(s)
+            except Exception:
+                return None
+
+        # Caso 2: solo comas.
+        if "," in s:
+            partes = s.split(",")
+            if len(partes) > 1 and len(partes[-1]) in (1, 2):
+                s = "".join(partes[:-1]) + "." + partes[-1]
+            else:
+                s = s.replace(",", "")
+            try:
+                return Decimal(s)
+            except Exception:
+                return None
+
+        # Caso 3: solo puntos.
+        if "." in s:
+            partes = s.split(".")
+            if len(partes) > 1 and len(partes[-1]) in (1, 2):
+                if all(len(p) == 3 for p in partes[:-1]):
+                    s = s.replace(".", "")
+                else:
+                    s = "".join(partes[:-1]) + "." + partes[-1]
+            else:
+                s = s.replace(".", "")
+            try:
+                return Decimal(s)
+            except Exception:
+                return None
+
+        # Caso 4: solo dígitos (posiblemente con espacios como miles).
+        s = s.replace(" ", "")
+        try:
+            return Decimal(s)
+        except Exception:
+            return None
+
+    numero = _parse_number_raw(texto)
+    if numero is None:
+        return None, multiplicador
+    return numero, multiplicador
+
+
+def _limpiar_valor_monetario(valor: str | None) -> int | None:
+    """Convierte una cadena de valor monetario a entero (COP) redondeado."""
+    numero, multiplicador = _parse_valor_monetario(valor)
+    if numero is None:
         return None
-    # Quitar símbolos y puntos de miles, reemplazar coma decimal por punto
-    limpio = re.sub(r"[^\d,\.]", "", valor)
-    if "," in limpio and "." in limpio:
-        # Asumir punto como separador de miles: 1.234.567,89
-        limpio = limpio.replace(".", "").replace(",", ".")
-    elif "," in limpio:
-        # Podría ser separador decimal o de miles; usamos heurística
-        partes = limpio.split(",")
-        if len(partes[-1]) == 2:
-            limpio = "".join(partes[:-1]) + "." + partes[-1]
-        else:
-            limpio = "".join(partes)
-    try:
-        return int(float(limpio))
-    except ValueError:
-        return None
+    return int((numero * multiplicador).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 def extraer_rup(path: str) -> dict[str, Any]:
@@ -185,29 +291,178 @@ def extraer_rup(path: str) -> dict[str, Any]:
     return campos
 
 
+def _calcular_indicadores_financieros(campos: dict[str, Any]) -> dict[str, Any]:
+    """Calcula indicadores financieros a partir de los campos extraídos."""
+    activo_total = campos.get("activos") or campos.get("activo_total")
+    pasivo_total = campos.get("pasivos") or campos.get("pasivo_total")
+    patrimonio = campos.get("patrimonio")
+    activo_corriente = campos.get("activo_corriente")
+    pasivo_corriente = campos.get("pasivo_corriente")
+    utilidad_operacional = campos.get("utilidad_operacional")
+    gastos_intereses = campos.get("gastos_intereses")
+
+    indicadores: dict[str, Any] = {}
+
+    if activo_corriente is not None and pasivo_corriente is not None and pasivo_corriente != 0:
+        indicadores["liquidez"] = round(activo_corriente / pasivo_corriente, 4)
+        indicadores["razon_corriente"] = round(activo_corriente / pasivo_corriente, 4)
+
+    if pasivo_total is not None and activo_total is not None and activo_total != 0:
+        indicadores["endeudamiento"] = round(pasivo_total / activo_total, 4)
+
+    if utilidad_operacional is not None and gastos_intereses is not None and gastos_intereses != 0:
+        indicadores["cobertura_intereses"] = round(utilidad_operacional / gastos_intereses, 4)
+
+    if utilidad_operacional is not None and patrimonio is not None and patrimonio != 0:
+        indicadores["rentabilidad_patrimonio"] = round(utilidad_operacional / patrimonio, 4)
+
+    if utilidad_operacional is not None and activo_total is not None and activo_total != 0:
+        indicadores["rentabilidad_activo"] = round(utilidad_operacional / activo_total, 4)
+
+    return indicadores
+
+
+def _detectar_multiplicador_global(texto: str) -> int:
+    """Detecta si el documento indica que las cifras están en millones/miles."""
+    primeras_lineas = "\n".join(texto.split("\n")[:10])
+    if re.search(r"\bcifras?\s+en\s+millones?\b", primeras_lineas, re.IGNORECASE):
+        return 1_000_000
+    if re.search(r"\ben\s+millones?\s+de\s+(pesos?|cop)\b", primeras_lineas, re.IGNORECASE):
+        return 1_000_000
+    if re.search(r"\bmillones?\s+de\s+(pesos?|cop)\b", primeras_lineas, re.IGNORECASE):
+        return 1_000_000
+    if re.search(r"\bcifras?\s+en\s+miles?\b", primeras_lineas, re.IGNORECASE):
+        return 1_000
+    return 1
+
+
 def extraer_estados_financieros(path: str) -> dict[str, Any]:
     """Extrae indicadores financieros clave de estados financieros."""
     texto_raw = extraer_texto(path)
     texto = normalizar_texto(texto_raw)
 
-    def buscar(etiquetas: list[str]) -> int | None:
-        val = _buscar_etiqueta_linea(texto, etiquetas) or _buscar_valor_despues(texto, etiquetas)
-        return _limpiar_valor_monetario(val)
+    multiplicador_global = _detectar_multiplicador_global(texto)
 
-    campos = {
+    def buscar(etiquetas: list[str]) -> int | None:
+        # Intentar primero búsqueda de tabla (más robusta para PDFs con tablas).
+        val_str = _buscar_valor_tabla(texto, etiquetas)
+        if val_str is None:
+            # Fallback a búsqueda por línea.
+            val_str = _buscar_etiqueta_linea(texto, etiquetas) or _buscar_valor_despues(texto, etiquetas)
+        if not val_str:
+            return None
+
+        # Si el documento indica "cifras en millones/miles" y el valor no lo dice
+        # explícitamente, aplicar el multiplicador global antes de redondear.
+        texto_valor = val_str.lower()
+        aplica_multiplicador_global = (
+            multiplicador_global > 1
+            and "millones" not in texto_valor
+            and "millon" not in texto_valor
+            and "miles" not in texto_valor
+            and "mil" not in texto_valor
+        )
+
+        numero, multiplicador_palabra = _parse_valor_monetario(val_str)
+        if numero is None:
+            return None
+        multiplicador_final = multiplicador_palabra
+        if aplica_multiplicador_global:
+            multiplicador_final *= multiplicador_global
+        return int((numero * multiplicador_final).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+    campos: dict[str, Any] = {
         "tipo_documento": "estados_financieros",
-        "activos": buscar(["total activos", "activos totales", "activo total"]),
-        "pasivos": buscar(["total pasivos", "pasivos totales", "pasivo total"]),
-        "patrimonio": buscar(["patrimonio", "patrimonio liquido", "patrimonio total", "total patrimonio"]),
-        "ingresos": buscar(["ingresos operacionales", "ingresos", "ventas"]),
-        "utilidad_neta": buscar(["utilidad neta", "ganancia neta", "resultado del ejercicio"]),
+        "activos": buscar(["total activos", "activos totales", "activo total", "activos"]),
+        "pasivos": buscar(["total pasivos", "pasivos totales", "pasivo total", "pasivos"]),
+        "patrimonio": buscar([
+            "patrimonio liquido",
+            "patrimonio total",
+            "total patrimonio",
+            "patrimonio",
+            "total patrimonio liquido",
+        ]),
+        "ingresos": buscar([
+            "ingresos operacionales",
+            "ingresos de actividades ordinarias",
+            "ventas",
+            "ingresos totales",
+            "total ingresos",
+            "ingresos",
+        ]),
+        "ingresos_no_operacionales": buscar([
+            "ingresos no operacionales",
+            "ingresos financieros",
+        ]),
+        "utilidad_neta": buscar([
+            "utilidad neta",
+            "ganancia neta",
+            "resultado del ejercicio",
+            "resultado neto",
+        ]),
+        "utilidad_operacional": buscar([
+            "utilidad operacional",
+            "utilidad en operacion",
+            "ganancia operacional",
+            "resultado operacional",
+            "utilidad bruta",
+        ]),
+        "activo_corriente": buscar([
+            "total activo corriente",
+            "activo corriente",
+            "activos corrientes",
+            "total activos corrientes",
+        ]),
+        "pasivo_corriente": buscar([
+            "total pasivo corriente",
+            "pasivo corriente",
+            "pasivos corrientes",
+            "total pasivos corrientes",
+        ]),
+        "activo_total": buscar(["total activos", "activos totales", "activo total"]),
+        "pasivo_total": buscar(["total pasivos", "pasivos totales", "pasivo total"]),
+        "efectivo": buscar(["efectivo y equivalentes", "efectivo", "caja y bancos", "caja", "bancos"]),
+        "cuentas_por_cobrar": buscar([
+            "cuentas por cobrar",
+            "deudores comerciales",
+            "clientes",
+        ]),
+        "inventarios": buscar(["inventarios", "existencias"]),
+        "proveedores": buscar(["proveedores", "cuentas por pagar", "acreedores comerciales"]),
+        "obligaciones_laborales": buscar([
+            "obligaciones laborales",
+            "pasivo laboral",
+            "beneficios empleados",
+        ]),
+        "gastos_intereses": buscar([
+            "gastos financieros",
+            "gastos por intereses",
+            "intereses",
+        ]),
         "texto_preview": texto_raw[:1000],
     }
 
-    if campos["activos"] and campos["pasivos"] and campos["patrimonio"]:
-        # Validación contable básica
-        campos["balance_ok"] = abs(campos["activos"] - campos["pasivos"] - campos["patrimonio"]) < max(campos["activos"] * 0.02, 1000)
+    # Normalizar alias: si no se encontró activos totales pero sí activo_total, usamos el último.
+    if campos.get("activo_total") and not campos.get("activos"):
+        campos["activos"] = campos["activo_total"]
+    if campos.get("pasivo_total") and not campos.get("pasivos"):
+        campos["pasivos"] = campos["pasivo_total"]
 
+    # Validación contable básica.
+    activos = campos.get("activos")
+    pasivos = campos.get("pasivos")
+    patrimonio = campos.get("patrimonio")
+    if activos and pasivos and patrimonio:
+        diferencia = abs(activos - pasivos - patrimonio)
+        campos["balance_ok"] = diferencia < max(activos * 0.02, 1000)
+        campos["balance_diferencia"] = diferencia
+
+    # Calcular indicadores financieros automáticamente.
+    indicadores = _calcular_indicadores_financieros(campos)
+    if indicadores:
+        campos["indicadores_calculados"] = indicadores
+
+    # Calcular confianza sobre campos clave.
     clave = ["activos", "pasivos", "patrimonio", "ingresos"]
     encontrados = sum(1 for k in clave if campos.get(k))
     campos["confianza"] = round(encontrados / len(clave), 2)
@@ -246,7 +501,16 @@ def extraer_documento(path: str, nombre_documento: str) -> dict[str, Any]:
     if "rup" in nombre_norm or "registro unico" in nombre_norm:
         return extraer_rup(path)
 
-    if "estados financieros" in nombre_norm or "balance" in nombre_norm or "situacion financiera" in nombre_norm:
+    nombre_parts = set(nombre_norm.replace("_", " ").replace("-", " ").split())
+    if any(term in nombre_norm for term in [
+        "estados financieros",
+        "estado financiero",
+        "balance",
+        "situacion financiera",
+        "estado de resultados",
+        "perdidas y ganancias",
+        "carga tributaria",
+    ]) or ("declaracion" in nombre_parts and "renta" in nombre_parts):
         return extraer_estados_financieros(path)
 
     if "experiencia" in nombre_norm or "certificado" in nombre_norm:
