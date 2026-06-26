@@ -19,8 +19,8 @@ from extraccion.requisitos_pliego import (
 )
 from models import AnalisisProceso, Cliente, Documento, DocumentoProceso, Proceso
 
-# Máximo de páginas a OCR cuando un PDF es escaneado. Evita procesar documentos enormes en el MVP.
-OCR_MAX_PAGES = int(os.getenv("OCR_MAX_PAGES", "50"))
+# Máximo de páginas a OCR cuando un PDF es escaneado. Los requisitos suelen estar en las primeras páginas.
+OCR_MAX_PAGES = int(os.getenv("OCR_MAX_PAGES", "30"))
 
 
 def extraer_texto(path: str) -> str:
@@ -46,19 +46,35 @@ def extraer_texto(path: str) -> str:
 
 
 def _extraer_pdf(path: str) -> str:
-    textos = []
+    """Extrae texto de un PDF. Usa PyMuPDF primero por velocidad;
+    si no hay texto nativo, usa OCR limitado a las primeras páginas.
+    """
     try:
-        with pdfplumber.open(path) as pdf:
-            for page in pdf.pages:
-                txt = page.extract_text()
+        import fitz  # PyMuPDF
+
+        textos: list[str] = []
+        with fitz.open(path) as doc:
+            for page in doc:
+                txt = page.get_text()
                 if txt:
                     textos.append(txt)
+        texto_nativo = "\n".join(textos)
+        if texto_nativo.strip():
+            return texto_nativo
     except Exception as exc:
-        textos.append(f"[Error leyendo PDF: {exc}]")
-
-    texto_nativo = "\n".join(textos)
-    if texto_nativo.strip():
-        return texto_nativo
+        # Fallback a pdfplumber si PyMuPDF falla
+        textos = []
+        try:
+            with pdfplumber.open(path) as pdf:
+                for page in pdf.pages:
+                    txt = page.extract_text()
+                    if txt:
+                        textos.append(txt)
+        except Exception as exc2:
+            return f"[Error leyendo PDF: {exc} / {exc2}]"
+        texto_nativo = "\n".join(textos)
+        if texto_nativo.strip():
+            return texto_nativo
 
     # Si no hay texto nativo, intentar OCR (requiere Tesseract instalado).
     try:
@@ -317,7 +333,14 @@ def analizar_pliego(proceso_id: int, cliente_id: int, db: Session) -> dict:
             "score_pliego": 0,
         }
 
-    texto_pliego = extraer_texto(pliego_path)
+    # Usar texto cacheado si existe para evitar repetir OCR costoso.
+    texto_pliego = pliego_doc.texto_extraido if pliego_doc.texto_extraido else None
+    if texto_pliego is None:
+        texto_pliego = extraer_texto(pliego_path)
+        if texto_pliego.strip() and pliego_doc:
+            pliego_doc.texto_extraido = texto_pliego
+            db.commit()
+
     if not texto_pliego.strip():
         return {
             "proceso_id": proceso_id,

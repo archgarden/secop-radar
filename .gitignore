@@ -46,3 +46,16 @@ Thumbs.db
 *.swp
 *.swo
 frontend.pid
+
+# Archivos temporales de inspección/piloto
+backend/inspeccion/
+backend/piloto_page.html
+backend/piloto_screenshot.png
+SEGUIMIENTO.md
+
+# Archivos binarios/temporales de nopecha_test
+backend/nopecha_test/*.crx
+backend/nopecha_test/*.png
+backend/nopecha_test/nopecha_ext/
+backend/nopecha_test/secop_docs/
+backend/nopecha_test/__pycache__/

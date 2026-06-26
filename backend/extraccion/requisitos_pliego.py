@@ -135,24 +135,108 @@ def _extraer_actividad_matriz1(path: str, actividad_buscada: str) -> dict | None
 
 def _encontrar_matriz1(documentos: list[Any]) -> str | None:
     """Busca el archivo de Matriz 1 Experiencia entre los documentos descargados."""
+    candidatos = []
     for doc in documentos:
         nombre = (doc.nombre or doc.filename or "").lower()
-        if "matriz1" in nombre or "matriz 1" in nombre or "experiencia" in nombre:
-            if doc.path and Path(doc.path).exists():
-                return doc.path
+        path = doc.path or ""
+        if not path or not Path(path).exists():
+            continue
+        # Puntuación de matching
+        score = 0
+        if "matriz1" in nombre or "matriz 1" in nombre:
+            score += 3
+        if "matriz1 experiencia" in nombre or "matriz 1 experiencia" in nombre:
+            score += 2
+        if "experiencia" in nombre and ("matriz1" in nombre or "matriz 1" in nombre):
+            score += 1
+        # Excluir archivos que claramente son otra matriz
+        if any(x in nombre for x in ["indicador", "riesgo", "bienes relevantes", "bienes_relevantes"]):
+            score -= 5
+        if score > 0:
+            candidatos.append((score, path))
+    if candidatos:
+        candidatos.sort(reverse=True)
+        return candidatos[0][1]
     return None
 
 
 def _encontrar_matriz2(documentos: list[Any]) -> str | None:
-    """Busca el archivo de Matriz 2 Indicadores Financieros entre los documentos descargados.
-
-    SECOP II a veces publica la Matriz 2 como DOCX aunque el nombre diga .xlsx.
-    """
+    """Busca el archivo de Matriz 2 Indicadores Financieros entre los documentos descargados."""
+    candidatos = []
     for doc in documentos:
         nombre = (doc.nombre or doc.filename or "").lower()
-        if "matriz2" in nombre or "matriz 2" in nombre or "indicadores financieros" in nombre:
-            if doc.path and Path(doc.path).exists():
-                return doc.path
+        path = doc.path or ""
+        if not path or not Path(path).exists():
+            continue
+        score = 0
+        if "matriz2" in nombre or "matriz 2" in nombre:
+            score += 3
+        if "indicadores financieros" in nombre or "indicadores y organizacionales" in nombre:
+            score += 2
+        if "matriz" in nombre and "indicador" in nombre:
+            score += 1
+        # Excluir otras matrices
+        if any(x in nombre for x in ["experiencia", "riesgo", "bienes relevantes", "bienes_relevantes"]):
+            score -= 5
+        if score > 0:
+            candidatos.append((score, path))
+    if candidatos:
+        candidatos.sort(reverse=True)
+        return candidatos[0][1]
+    return None
+
+
+def _extraer_valor_minimo_smmlv(texto_pliego: str) -> dict[str, Any] | None:
+    """Extrae el valor mínimo de experiencia expresado en SMMLV del pliego.
+
+    Busca patrones como:
+        - "SMMLV: 282.14"
+        - "... expresado en SMMLV" cerca de un número
+        - "valor mínimo a certificar ... 282.14 SMMLV"
+    Retorna {"smmlv": float, "cop": float} o None.
+    """
+    texto_norm = _normalizar(texto_pliego)
+
+    # Patrón directo: "SMMLV: 282.14" o "SMMLV 282.14"
+    patron_directo = re.search(
+        r"smmlv[:\s]+(\d{1,3}(?:[.,]\d+)?)",
+        texto_norm,
+    )
+    if patron_directo:
+        valor_str = patron_directo.group(1).replace(",", ".")
+        try:
+            smmlv = float(valor_str)
+            return {"smmlv": smmlv, "cop": round(smmlv * SMMLV), "fuente": "SMMLV directo"}
+        except ValueError:
+            pass
+
+    # Patrón: "valor mínimo a certificar ... N SMMLV"
+    for m in re.finditer(r"valor\s*minimo\s*a\s*certificar", texto_norm):
+        ventana = texto_norm[max(0, m.start() - 100):min(len(texto_norm), m.end() + 200)]
+        match = re.search(r"(\d{1,3}(?:[.,]\d+)?)\s*smmlv", ventana)
+        if match:
+            try:
+                smmlv = float(match.group(1).replace(",", "."))
+                return {"smmlv": smmlv, "cop": round(smmlv * SMMLV), "fuente": "valor mínimo a certificar"}
+            except ValueError:
+                pass
+
+    return None
+
+
+def _extraer_presupuesto_oficial_pliego(texto_pliego: str) -> int | None:
+    """Extrae el presupuesto oficial del cuadro 1.1 del pliego (pesos incluido IVA)."""
+    texto_norm = _normalizar(texto_pliego)
+    # Buscar "presupuesto oficial" seguido de un valor monetario en las siguientes 300 chars
+    for m in re.finditer(r"presupuesto\s*oficial", texto_norm):
+        ventana = texto_norm[max(0, m.start()):min(len(texto_norm), m.end() + 400)]
+        match = re.search(r"\$\s*(\d{1,4}(?:[.,]\d{3})*(?:,\d{2})?)", ventana)
+        if match:
+            valor_str = match.group(1).replace(".", "").replace(",", ".")
+            try:
+                return int(float(valor_str))
+            except ValueError:
+                pass
     return None
 
 
@@ -233,17 +317,24 @@ def _extraer_matriz2(path: str) -> dict[str, Any] | None:
     return {
         "indicadores": indicadores,
         "resumen": _resumen_indicadores(indicadores),
+        "categorias": sorted({i["categoria"] for i in indicadores}),
     }
 
 
 def _extraer_numero_umbral(texto: str) -> float | None:
-    """Extrae un número de un texto como '1,2', ',02', '1.3', 'Definido en pliegos'."""
+    """Extrae un número de un texto como '1,2', ',02', '1.300.000', 'Definido en pliegos'.
+
+    Interpreta el formato colombiano: punto como separador de miles y coma como decimal.
+    """
     if not texto:
         return None
-    texto = texto.strip().replace(".", "").replace(",", ".")
+    texto = texto.strip()
     # Casos como ",02" → "0.02"
-    if texto.startswith("."):
+    if texto.startswith(","):
         texto = "0" + texto
+    # Eliminar separadores de miles (puntos entre dígitos) y convertir coma decimal a punto
+    texto = re.sub(r"(?<=\d)\.(?=\d{3}(?:\D|$))", "", texto)
+    texto = texto.replace(",", ".")
     match = re.search(r"(\d+(?:\.\d+)?)", texto)
     if match:
         try:
@@ -406,40 +497,57 @@ def extraer_requisitos_estructurados(
 
     # 2. Actividad principal: intentar detectar actividades de infraestructura,
     # edificación, consultoría y otros sectores comunes en SECOP II.
-    actividad_match = re.search(
-        r"(\d+\.\d+)\s+([a-z0-9\s\-]+?(?:"
-        r"vias?\s+terciarias|vias?\s+(primarias?|secundarias?)|vias?\s+urbanas?|"
+    # Primero buscamos el formato del Documento Base: "requisitos de experiencia son:"
+    # seguido de la sección y la actividad principal.
+    actividad_detectada = None
+    seccion_match = re.search(
+        r"requisitos\s*de\s*experiencia\s*son[:\s]+"
+        r"(\d+(?:\.\d+)?)\s+([a-z0-9\s\-]+?(?:"
+        r"vias?\s+(?:primarias?|secundarias?|terciarias)|vias?\s+urbanas?|"
         r"puentes|tuneles|túneles|aeroportuarias?|ferreas?|férreas?|"
         r"edificacion|edificación|construccion|construcción|"
         r"consultoria|consultoría|diseno|diseño|interventoria|interventoría|"
         r"estudios|topografia|topografía|geotecnia|hidraulica|hidráulica|"
         r"mantenimiento|rehabilitacion|rehabilitación|modernizacion|modernización"
-        r"))\s*\.?",
+        r"))\s*\.?\s*"
+        r"(\d+(?:\.\d+)?)\s+([a-z0-9\s\-]+?(?:"
+        r"vias?\s+(?:primarias?|secundarias?|terciarias)|vias?\s+urbanas?|"
+        r"puentes|tuneles|túneles|aeroportuarias?|ferreas?|férreas?|"
+        r"edificacion|edificación|construccion|construcción|"
+        r"consultoria|consultoría|diseno|diseño|interventoria|interventoría|"
+        r"estudios|topografia|topografía|geotecnia|hidraulica|hidráulica|"
+        r"mantenimiento|rehabilitacion|rehabilitación|modernizacion|modernización"
+        r"))",
         texto_norm,
     )
-    if actividad_match:
-        resultado["actividad_principal"] = {
-            "codigo": actividad_match.group(1).strip(),
-            "descripcion": actividad_match.group(2).strip().upper(),
+    if seccion_match:
+        actividad_detectada = {
+            "seccion_codigo": seccion_match.group(1).strip(),
+            "seccion_descripcion": seccion_match.group(2).strip().upper(),
+            "codigo": seccion_match.group(3).strip(),
+            "descripcion": seccion_match.group(4).strip().upper(),
         }
     else:
-        # Fallback: buscar frase "requisitos de experiencia son:" seguido de actividad
-        fallback = re.search(
-            r"requisitos\s*de\s*experiencia\s*son[:\s]+(\d+\.\d+)?\s*\.?\s*([a-z0-9\s\-]+?(?:"
+        # Fallback: buscar una sola actividad con código
+        actividad_match = re.search(
+            r"(\d+\.\d+)\s+([a-z0-9\s\-]+?(?:"
             r"vias?\s+terciarias|vias?\s+(primarias?|secundarias?)|vias?\s+urbanas?|"
             r"puentes|tuneles|túneles|aeroportuarias?|ferreas?|férreas?|"
             r"edificacion|edificación|construccion|construcción|"
             r"consultoria|consultoría|diseno|diseño|interventoria|interventoría|"
             r"estudios|topografia|topografía|geotecnia|hidraulica|hidráulica|"
             r"mantenimiento|rehabilitacion|rehabilitación|modernizacion|modernización"
-            r"))",
+            r"))\s*\.?",
             texto_norm,
         )
-        if fallback:
-            resultado["actividad_principal"] = {
-                "codigo": (fallback.group(1) or "").strip(),
-                "descripcion": fallback.group(2).strip().upper(),
+        if actividad_match:
+            actividad_detectada = {
+                "codigo": actividad_match.group(1).strip(),
+                "descripcion": actividad_match.group(2).strip().upper(),
             }
+
+    if actividad_detectada:
+        resultado["actividad_principal"] = actividad_detectada
 
     # 3. Experiencia: número de contratos
     min_contratos = 1
@@ -495,43 +603,63 @@ def extraer_requisitos_estructurados(
     if tipos_obra:
         resultado["experiencia"]["tipos_obra"] = tipos_obra
 
-    # 5. Valor mínimo de experiencia (% del presupuesto oficial)
-    porcentajes = _buscar_valor_porcentaje(
-        texto_pliego,
-        [
-            "experiencia general",
-            "experiencia especifica",
-            "experiencia",
-            "valor del contrato",
-        ],
-        palabras_excluir=[
-            "anticipo",
-            "pago anticipado",
-            "capital de trabajo",
-            "aiu",
-            "administracion",
-            "imprevisto",
-            "utilidad",
-        ],
-    )
-    # Filtrar porcentajes plausibles (10% - 100%)
-    porcentajes_plausibles = [p for p in porcentajes if 10 <= p["valor"] <= 100]
-    if porcentajes_plausibles:
-        # Tomar el menor valor mínimo asociado a experiencia/presupuesto
-        min_pct = min(porcentajes_plausibles, key=lambda x: x["valor"])
-        resultado["experiencia"]["valor_minimo_po_pct"] = min_pct["valor"]
-        resultado["experiencia"]["valor_minimo_cop"] = round(presupuesto * min_pct["valor"] / 100)
+    # Presupuesto oficial según el pliego (puede diferir del valor de SECOP)
+    presupuesto_pliego = _extraer_presupuesto_oficial_pliego(texto_pliego)
+    if presupuesto_pliego:
+        resultado["presupuesto_oficial_pliego"] = presupuesto_pliego
+        # Si hay diferencia significativa con el presupuesto de SECOP, advertir
+        if presupuesto > 0 and abs(presupuesto_pliego - presupuesto) / presupuesto > 0.05:
+            resultado["advertencias"].append(
+                f"El presupuesto del pliego (${presupuesto_pliego:,.0f} COP) difiere "
+                f"del registrado en SECOP (${presupuesto:,.0f} COP)."
+            )
+
+    # 5. Valor mínimo de experiencia: primero intentar SMMLV explícito en el pliego
+    min_smmlv = _extraer_valor_minimo_smmlv(texto_pliego)
+    if min_smmlv:
+        resultado["experiencia"]["valor_minimo_smmlv"] = min_smmlv["smmlv"]
+        resultado["experiencia"]["valor_minimo_cop_smmlv"] = min_smmlv["cop"]
+        resultado["experiencia"]["valor_minimo_cop"] = min_smmlv["cop"]
+        resultado["experiencia"]["fuente_valor_minimo"] = min_smmlv["fuente"]
+
+    # 5b. Valor mínimo de experiencia (% del presupuesto oficial)
+    if not min_smmlv:
+        porcentajes = _buscar_valor_porcentaje(
+            texto_pliego,
+            [
+                "experiencia general",
+                "experiencia especifica",
+                "experiencia",
+                "valor del contrato",
+            ],
+            palabras_excluir=[
+                "anticipo",
+                "pago anticipado",
+                "capital de trabajo",
+                "aiu",
+                "administracion",
+                "imprevisto",
+                "utilidad",
+            ],
+        )
+        # Filtrar porcentajes plausibles (10% - 100%)
+        porcentajes_plausibles = [p for p in porcentajes if 10 <= p["valor"] <= 100]
+        if porcentajes_plausibles:
+            # Tomar el menor valor mínimo asociado a experiencia/presupuesto
+            min_pct = min(porcentajes_plausibles, key=lambda x: x["valor"])
+            resultado["experiencia"]["valor_minimo_po_pct"] = min_pct["valor"]
+            resultado["experiencia"]["valor_minimo_cop"] = round(presupuesto * min_pct["valor"] / 100)
 
     # 6. Buscar Matriz 1 Experiencia y cruzar con actividad principal
     matriz1_path = _encontrar_matriz1(documentos_proceso)
-    if matriz1_path and resultado["actividad_principal"]:
-        actividad_str = resultado["actividad_principal"]["descripcion"]
+    if matriz1_path and resultado.get("actividad_principal"):
+        actividad_str = resultado["actividad_principal"].get("descripcion", "")
         matriz = _extraer_actividad_matriz1(matriz1_path, actividad_str)
         if matriz:
             resultado["experiencia"]["matriz1"] = matriz
         else:
             # Intentar con código + descripción corta
-            codigo = resultado["actividad_principal"]["codigo"]
+            codigo = resultado["actividad_principal"].get("codigo", "")
             matriz = _extraer_actividad_matriz1(matriz1_path, codigo)
             if matriz:
                 resultado["experiencia"]["matriz1"] = matriz
@@ -564,12 +692,11 @@ def extraer_requisitos_estructurados(
     if matriz2_data:
         resultado["capacidad_financiera"]["matriz2"] = matriz2_data
         # Complementar/actualizar indicadores requeridos con los de la Matriz 2
-        for perfil, cats in matriz2_data.get("resumen", {}).items():
-            for cat in cats.keys():
-                if cat not in indicadores and cat != "capital_trabajo":
-                    indicadores.append(cat)
-            if "capital_trabajo" in cats:
-                resultado["capacidad_financiera"]["capital_trabajo_requerido"] = True
+        for cat in matriz2_data.get("categorias", []):
+            if cat not in indicadores and cat != "capital_trabajo":
+                indicadores.append(cat)
+        if "capital_trabajo" in matriz2_data.get("categorias", []):
+            resultado["capacidad_financiera"]["capital_trabajo_requerido"] = True
 
     if indicadores:
         resultado["capacidad_financiera"]["indicadores_requeridos"] = indicadores
@@ -579,14 +706,73 @@ def extraer_requisitos_estructurados(
 
     # 9. Documentos requeridos (habilitantes y de oferta)
     documentos_map = {
-        "rup": ["registro unico de proponentes", "rup"],
-        "estados_financieros": ["estados financieros"],
-        "certificados_experiencia": ["certificados de experiencia", "formato 3"],
-        "paz_salvo_parafiscales": ["paz y salvo", "parafiscales"],
-        "poliza_seriedad": ["poliza de seriedad", "seriedad de la oferta"],
-        "propuesta_tecnica": ["propuesta tecnica"],
-        "propuesta_economica": ["propuesta economica", "formato de precios"],
-        "carta_presentacion": ["carta de presentacion"],
+        "rup": ["registro unico de proponentes", "registro único de proponentes", "rup"],
+        "autorizacion_datos_personales": [
+            "autorizacion de datos personales",
+            "autorización de datos personales",
+            "autorizacion para el tratamiento de datos personales",
+            "autorización para el tratamiento de datos personales",
+            "tratamiento de datos personales",
+            "datos personales",
+            "ley 1581 de 2012",
+            "formato 11",
+            "formato11",
+        ],
+        "estados_financieros": [
+            "estados financieros",
+            "estado de situacion financiera",
+            "estado de situación financiera",
+            "estado de resultados",
+            "balance general",
+            "estados financieros auditados",
+            "estados contables",
+        ],
+        "certificados_experiencia": [
+            "certificados de experiencia",
+            "certificado de experiencia",
+            "experiencia del proponente",
+            "soportes de experiencia",
+            "actas de liquidacion",
+            "actas de liquidación",
+            "formato 3",
+        ],
+        "paz_salvo_parafiscales": ["paz y salvo", "parafiscales", "pago de aportes", "seguridad social"],
+        "poliza_seriedad": [
+            "poliza de seriedad",
+            "póliza de seriedad",
+            "seriedad de la oferta",
+            "garantia de seriedad",
+            "garantia de seriedad de la oferta",
+            "garantia de oferta",
+            "caucion de seriedad",
+            "caucion de oferta",
+        ],
+        "propuesta_tecnica": [
+            "propuesta tecnica",
+            "propuesta técnica",
+            "oferta tecnica",
+            "oferta técnica",
+            "plan de trabajo",
+            "metodologia",
+            "metodología",
+            "programa de trabajo",
+        ],
+        "propuesta_economica": [
+            "propuesta economica",
+            "propuesta económica",
+            "oferta economica",
+            "oferta económica",
+            "formato de precios",
+            "precios unitarios",
+        ],
+        "carta_presentacion": ["carta de presentacion", "carta de presentación", "presentacion de la oferta"],
+        # Matrices y formatos técnicos/financieros que el proponente debe diligenciar
+        "matriz1_experiencia": ["matriz 1", "matriz1", "experiencia requerida"],
+        "matriz2_indicadores": ["matriz 2", "matriz2", "indicadores financieros"],
+        "matriz3_riesgos": ["matriz 3", "matriz3", "riesgos"],
+        "capacidad_financiera": ["capacidad financiera", "formato 4", "formato4"],
+        "capacidad_residual": ["capacidad residual", "formato 5", "formato5"],
+        "bienes_relevantes": ["matriz 4", "matriz4", "bienes relevantes"],
     }
     for doc_id, palabras in documentos_map.items():
         if any(p in texto_norm for p in palabras):
@@ -610,9 +796,9 @@ def extraer_requisitos_estructurados(
         resultado["advertencias"].append("No se encontró Matriz 1 — Experiencia entre los documentos.")
     if not matriz2_path:
         resultado["advertencias"].append("No se encontró Matriz 2 — Indicadores Financieros entre los documentos.")
-    if not resultado["experiencia"].get("valor_minimo_po_pct"):
+    if not resultado["experiencia"].get("valor_minimo_po_pct") and not resultado["experiencia"].get("valor_minimo_smmlv"):
         resultado["advertencias"].append(
-            "No se pudo determinar un valor mínimo de experiencia en % del presupuesto oficial."
+            "No se pudo determinar un valor mínimo de experiencia en % del presupuesto oficial ni en SMMLV."
         )
     if resultado["capacidad_residual"].get("requerida") and not resultado["capacidad_residual"].get("formula_crpc_corto_plazo"):
         resultado["advertencias"].append(

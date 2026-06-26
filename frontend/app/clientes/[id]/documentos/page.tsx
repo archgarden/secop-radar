@@ -9,16 +9,32 @@ import ThemeToggle from '@/components/ThemeToggle'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-const DOCUMENTOS_REQUERIDOS = [
-  'RUP vigente (Registro Único de Proponentes)',
-  'Estados financieros con corte (año anterior)',
-  'Certificados de experiencia en SMMLV',
-  'Paz y salvo de parafiscales (SENA, ICBF, Caja)',
-  'Póliza de seriedad de la oferta',
-  'Propuesta técnica',
-  'Propuesta económica',
-  'Carta de presentación de oferta',
-]
+interface CoreDocumento {
+  id: string
+  nombre: string
+  categoria: string
+  tipo_core: string
+  obligatorio: boolean
+  keywords: string[]
+  frecuencia_absoluta: number
+  frecuencia_relativa: number
+  requerido_en_pliego: number
+  requerido_relativo: number
+  frecuencia_label: string
+  procesos_analizados: number
+  no_aplica?: boolean
+}
+
+interface CoreDocumentos {
+  version?: string
+  fecha_generacion?: string
+  fuente?: string
+  procesos_analizados?: number
+  umbrales?: { obligatorio: number; frecuente: number }
+  proponente?: CoreDocumento[]
+  pliego?: CoreDocumento[]
+  calidad?: CoreDocumento[]
+}
 
 interface ExtraccionApi {
   tipo_documento?: string
@@ -69,6 +85,7 @@ export default function DocumentosCliente() {
 
   const [documentos, setDocumentos] = useState<DocumentoApi[]>([])
   const [perfil, setPerfil] = useState<PerfilApi | null>(null)
+  const [coreDocumentos, setCoreDocumentos] = useState<CoreDocumentos | null>(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState<string | null>(null)
   const [extracting, setExtracting] = useState<string | null>(null)
@@ -79,10 +96,12 @@ export default function DocumentosCliente() {
     Promise.all([
       fetch(`${API}/clientes/${clienteId}/documentos`).then(r => r.json()),
       fetch(`${API}/clientes/${clienteId}/perfil`).then(r => r.json()),
+      fetch(`${API}/clientes/${clienteId}/core-documentos`).then(r => r.ok ? r.json() : null),
     ])
-      .then(([docs, perfilData]: [DocumentoApi[], PerfilApi]) => {
+      .then(([docs, perfilData, coreData]: [DocumentoApi[], PerfilApi, CoreDocumentos | null]) => {
         setDocumentos(docs)
         setPerfil(perfilData)
+        setCoreDocumentos(coreData)
         setLoading(false)
       })
       .catch(err => { setError(err.message); setLoading(false) })
@@ -127,8 +146,28 @@ export default function DocumentosCliente() {
     }
   }
 
-  const subidos = documentos.map(d => d.nombre)
-  const progreso = Math.min(Math.round((subidos.length / DOCUMENTOS_REQUERIDOS.length) * 100), 100)
+  const documentosCore = coreDocumentos?.proponente || []
+
+  function documentoCubreCore(doc: CoreDocumento, nombresSubidos: string[]): DocumentoApi | undefined {
+    const terminos = [doc.nombre, ...doc.keywords]
+    for (const termino of terminos) {
+      if (!termino) continue
+      const reqPalabras = termino.toLowerCase().replace(/[^a-z0-9áéíóúñ]+/g, ' ').trim().split(/\s+/).filter(Boolean)
+      if (reqPalabras.length === 0) continue
+      for (const nombre of nombresSubidos) {
+        const docPalabras = nombre.toLowerCase().replace(/[^a-z0-9áéíóúñ]+/g, ' ').trim().split(/\s+/).filter(Boolean)
+        const interseccion = reqPalabras.filter(p => docPalabras.includes(p))
+        if (interseccion.length >= 2 || (reqPalabras.length === 1 && interseccion.length === 1)) {
+          return documentos.find(d => d.nombre === nombre)
+        }
+      }
+    }
+    return undefined
+  }
+
+  const documentosRelevantes = documentosCore.filter(d => !d.no_aplica)
+  const documentosCumplidos = documentosRelevantes.filter(d => documentoCubreCore(d, documentos.map(x => x.nombre)))
+  const progreso = documentosRelevantes.length ? Math.min(Math.round((documentosCumplidos.length / documentosRelevantes.length) * 100), 100) : 0
 
   function fmtCOP(n: number | null) {
     if (!n) return '—'
@@ -250,30 +289,40 @@ export default function DocumentosCliente() {
 
         {loading ? (
           <div style={{ color: 'var(--text-sec)', textAlign: 'center', padding: 40 }}>Cargando documentos y extracciones...</div>
+        ) : documentosCore.length === 0 ? (
+          <div style={{ color: 'var(--text-sec)', textAlign: 'center', padding: 40 }}>Core de documentos no disponible.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {DOCUMENTOS_REQUERIDOS.map(nombre => {
-              const doc = documentos.find(d => d.nombre === nombre)
+            {documentosCore.map(docCore => {
+              const doc = documentoCubreCore(docCore, documentos.map(d => d.nombre))
+              const nombre = docCore.nombre
               const isUploading = uploading === nombre
               const isExtracting = extracting === nombre
+              const noAplica = docCore.no_aplica
               return (
-                <div key={nombre} style={{
-                  background: 'var(--surface)',
-                  border: `1px solid ${doc ? 'rgba(34,197,94,.35)' : 'var(--border)'}`,
+                <div key={docCore.id} style={{
+                  background: noAplica ? 'rgba(100,116,139,0.08)' : 'var(--surface)',
+                  border: `1px solid ${doc ? 'rgba(34,197,94,.35)' : noAplica ? 'var(--border)' : 'var(--border)'}`,
                   borderRadius: 6,
                   overflow: 'hidden',
+                  opacity: noAplica ? 0.7 : 1,
                 }}>
                   <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={{
                       width: 28, height: 28, borderRadius: '50%',
-                      background: doc ? 'rgba(34,197,94,.15)' : 'rgba(239,68,68,.1)',
-                      border: `1px solid ${doc ? 'var(--green)' : 'var(--red)'}`,
+                      background: doc ? 'rgba(34,197,94,.15)' : noAplica ? 'rgba(100,116,139,.15)' : 'rgba(239,68,68,.1)',
+                      border: `1px solid ${doc ? 'var(--green)' : noAplica ? 'var(--text-sec)' : 'var(--red)'}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
                     }}>
                       {doc ? (
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      ) : noAplica ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-sec)" strokeWidth="2" strokeLinecap="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                       ) : (
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round">
@@ -283,7 +332,13 @@ export default function DocumentosCliente() {
                       )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{nombre}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{nombre}</div>
+                        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5, padding: '2px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: docCore.frecuencia_label === 'obligatorio' ? 'var(--green)' : docCore.frecuencia_label === 'frecuente' ? 'var(--yellow)' : 'var(--text-sec)', fontWeight: 600 }}>
+                          {docCore.frecuencia_label}
+                        </span>
+                        {noAplica && <span style={{ fontSize: 9, color: 'var(--text-sec)', fontWeight: 600 }}>No aplica</span>}
+                      </div>
                       {doc && (
                         <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 2 }}>
                           {doc.filename} · {new Date(doc.fecha_subida).toLocaleDateString('es-CO')}
@@ -313,24 +368,24 @@ export default function DocumentosCliente() {
                       </button>
                     ) : (
                       <label style={{
-                        background: isUploading ? 'var(--border)' : 'var(--orange)',
+                        background: isUploading || noAplica ? 'var(--border)' : 'var(--orange)',
                         color: '#fff',
                         border: 'none',
                         borderRadius: 4,
                         padding: '6px 14px',
                         fontSize: 12,
                         fontWeight: 600,
-                        cursor: isUploading ? 'not-allowed' : 'pointer',
+                        cursor: isUploading || noAplica ? 'not-allowed' : 'pointer',
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                       }}>
                         {isUploading && (
                           <span style={{ width: 10, height: 10, border: '2px solid rgba(255,255,255,.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                         )}
-                        {isUploading ? 'Subiendo...' : 'Subir'}
+                        {isUploading ? 'Subiendo...' : noAplica ? 'No aplica' : 'Subir'}
                         <input
                           type="file"
                           style={{ display: 'none' }}
-                          disabled={isUploading}
+                          disabled={isUploading || noAplica}
                           onChange={e => {
                             const file = e.target.files?.[0]
                             if (file) subirArchivo(nombre, file)

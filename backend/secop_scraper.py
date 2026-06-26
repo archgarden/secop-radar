@@ -415,6 +415,85 @@ def _download_files(document_links: list[dict], output_dir: Path, context) -> li
     return results
 
 
+def _procesar_un_proceso(
+    page,
+    context,
+    proceso: Proceso,
+    db: Session,
+    timeout_seconds: int,
+    resolver_captcha_manual: bool = True,
+) -> dict:
+    """Descarga los documentos de un único proceso usando una página/navegador ya abiertos.
+
+    Permite reutilizar la sesión del navegador para procesar múltiples procesos
+    (modo batch). Si aparece un CAPTCHA, espera a que el usuario lo resuelva
+    cuando `resolver_captcha_manual=True`.
+    """
+    notice_uid = _notice_uid_from_url(proceso.url_documento)
+    if not notice_uid:
+        return {"ok": False, "error": "El proceso no tiene url_documento válida con noticeUID"}
+
+    output_base = Path(SCOP_SCRAPER_STORAGE)
+    if not output_base.is_absolute():
+        output_base = (Path(__file__).resolve().parent / output_base).resolve()
+    output_dir = output_base / str(proceso.id)
+
+    detail_url = f"{BASE_DETAIL_URL}?noticeUID={notice_uid}"
+
+    try:
+        logger.info("Navegando a %s", detail_url)
+        page.goto(detail_url, wait_until="domcontentloaded", timeout=120000)
+
+        if resolver_captcha_manual:
+            print(f"MODO MANUAL [{proceso.numero_proceso}]: resuelve el CAPTCHA si aparece...")
+            print(f"  URL: {page.url}")
+            print(f"  Title: {page.title()}")
+            if not _wait_for_detail_page(page, timeout_seconds=timeout_seconds):
+                print(f"  TIMEOUT. URL final: {page.url}")
+                return {
+                    "ok": False,
+                    "error": "No se resolvió el CAPTCHA en el tiempo esperado",
+                }
+            print(f"  CAPTCHA resuelto / página cargada. URL final: {page.url}")
+
+        # Extraer y descargar documentos.
+        document_links = _extract_document_links(page)
+        if not document_links:
+            return {"ok": True, "descargados": 0, "errores": 0, "documentos": []}
+
+        downloaded = _download_files(document_links, output_dir, context)
+
+        # Persistir en base de datos.
+        for item in downloaded:
+            doc = DocumentoProceso(
+                proceso_id=proceso.id,
+                nombre=item["nombre"],
+                filename=item["filename"],
+                path=item["path"] or "",
+                url=item["url"],
+                size_bytes=item["size_bytes"],
+                es_pliego=_is_pliego(item["nombre"]),
+                estado="descargado" if item["ok"] else "error",
+                error=item.get("error"),
+            )
+            db.add(doc)
+        db.commit()
+
+        ok_count = sum(1 for d in downloaded if d["ok"])
+        error_count = len(downloaded) - ok_count
+
+        return {
+            "ok": error_count == 0,
+            "descargados": ok_count,
+            "errores": error_count,
+            "documentos": downloaded,
+        }
+
+    except Exception as exc:
+        logger.exception("Error procesando proceso %s: %s", proceso.id, exc)
+        return {"ok": False, "error": str(exc)}
+
+
 def descargar_documentos_proceso(
     proceso: Proceso,
     db: Session,
@@ -432,92 +511,107 @@ def descargar_documentos_proceso(
     if not SCOP_SCRAPER_ENABLED:
         return {"ok": False, "error": "Scraper deshabilitado (SCOP_SCRAPER_ENABLED=false)"}
 
-    notice_uid = _notice_uid_from_url(proceso.url_documento)
-    if not notice_uid:
-        return {"ok": False, "error": "El proceso no tiene url_documento válida con noticeUID"}
-
-    output_base = Path(SCOP_SCRAPER_STORAGE)
-    if not output_base.is_absolute():
-        output_base = (Path(__file__).resolve().parent / output_base).resolve()
-    output_dir = output_base / str(proceso.id)
-
     timeout_seconds = timeout_seconds or SCOP_SCRAPER_TIMEOUT
-    detail_url = f"{BASE_DETAIL_URL}?noticeUID={notice_uid}"
     sitekey = "6LcMmakZAAAAAB157Q90hORUGtNd790TCws4vBNw"
+    detail_url = f"{BASE_DETAIL_URL}?noticeUID={_notice_uid_from_url(proceso.url_documento)}"
 
     playwright = None
     context = None
     user_data_dir = None
 
     try:
-        # 1. Resolver CAPTCHA con el servicio configurado (o None para modo manual).
         token = _solve_captcha(sitekey, detail_url, timeout=timeout_seconds)
         if token:
             logger.info("Token de reCAPTCHA obtenido (%s...)", token[:30])
 
-        # 2. Abrir navegador (con extensión NopeCHA si está configurada).
         use_nopecha_ext = CAPTCHA_SOLVER == "nopecha_extension"
         playwright, context, user_data_dir = _launch_browser(
             headless=False, load_nopecha_extension=use_nopecha_ext
         )
         page = context.new_page()
-        logger.info("Navegando a %s", detail_url)
-        page.goto(detail_url, wait_until="domcontentloaded", timeout=120000)
 
         if token:
-            # Modo automático: inyectar token.
+            page.goto(detail_url, wait_until="domcontentloaded", timeout=120000)
             page.wait_for_selector(".g-recaptcha", timeout=30000)
             _inject_recaptcha_token(page, token)
             if not _wait_for_detail_page(page, timeout_seconds=30):
                 return {"ok": False, "error": "El token no fue aceptado por SECOP II"}
-        else:
-            # Modo manual: esperar a que el usuario resuelva el CAPTCHA.
-            print("MODO MANUAL: resuelve el CAPTCHA en la ventana de Chrome...")
-            print(f"  URL inicial: {page.url}")
-            print(f"  Title inicial: {page.title()}")
-            if not _wait_for_detail_page(page, timeout_seconds=timeout_seconds):
-                print(f"  TIMEOUT. URL final: {page.url}")
-                return {"ok": False, "error": "No se resolvió el CAPTCHA en el tiempo esperado"}
-            print(f"  CAPTCHA resuelto. URL final: {page.url}")
+            return _procesar_un_proceso(page, context, proceso, db, timeout_seconds, resolver_captcha_manual=False)
 
-        # 3. Extraer y descargar documentos.
-        document_links = _extract_document_links(page)
-        if not document_links:
-            return {"ok": True, "descargados": 0, "errores": 0, "documentos": []}
-
-        downloaded = _download_files(document_links, output_dir, context)
-
-        # 4. Persistir en base de datos.
-        registros_db = []
-        for item in downloaded:
-            doc = DocumentoProceso(
-                proceso_id=proceso.id,
-                nombre=item["nombre"],
-                filename=item["filename"],
-                path=item["path"] or "",
-                url=item["url"],
-                size_bytes=item["size_bytes"],
-                es_pliego=_is_pliego(item["nombre"]),
-                estado="descargado" if item["ok"] else "error",
-                error=item.get("error"),
-            )
-            db.add(doc)
-            registros_db.append(doc)
-        db.commit()
-
-        ok_count = sum(1 for d in downloaded if d["ok"])
-        error_count = len(downloaded) - ok_count
-
-        return {
-            "ok": error_count == 0,
-            "descargados": ok_count,
-            "errores": error_count,
-            "documentos": downloaded,
-        }
+        return _procesar_un_proceso(page, context, proceso, db, timeout_seconds, resolver_captcha_manual=True)
 
     except Exception as exc:
         logger.exception("Error en scraper SECOP II: %s", exc)
         return {"ok": False, "error": str(exc)}
+
+    finally:
+        if context:
+            context.close()
+        if playwright:
+            playwright.stop()
+        if user_data_dir:
+            shutil.rmtree(user_data_dir, ignore_errors=True)
+
+
+def descargar_documentos_procesos_batch(
+    procesos: list[Proceso],
+    db: Session,
+    timeout_seconds: int | None = None,
+) -> list[dict]:
+    """Descarga documentos de múltiples procesos reutilizando una sola sesión de navegador.
+
+    Útil para modo manual: el usuario resuelve el CAPTCHA una vez al inicio y,
+    si SECOP mantiene la sesión, los procesos siguientes pueden cargar sin
+    volver a pedir CAPTCHA.
+
+    Retorna una lista de dicts con el resultado de cada proceso.
+    """
+    if not SCOP_SCRAPER_ENABLED:
+        return [{"ok": False, "error": "Scraper deshabilitado (SCOP_SCRAPER_ENABLED=false)"}]
+
+    if not procesos:
+        return []
+
+    timeout_seconds = timeout_seconds or SCOP_SCRAPER_TIMEOUT
+    use_nopecha_ext = CAPTCHA_SOLVER == "nopecha_extension"
+
+    playwright = None
+    context = None
+    user_data_dir = None
+    resultados = []
+
+    try:
+        playwright, context, user_data_dir = _launch_browser(
+            headless=False, load_nopecha_extension=use_nopecha_ext
+        )
+        page = context.new_page()
+
+        print("=" * 60)
+        print(f"MODO BATCH: se descargarán {len(procesos)} procesos")
+        print("Se abrió una ventana de Chrome. Resuelve el CAPTCHA cuando aparezca.")
+        print("=" * 60)
+
+        for idx, proceso in enumerate(procesos, start=1):
+            print(f"\n[{idx}/{len(procesos)}] Procesando {proceso.numero_proceso} (ID {proceso.id})")
+            resultado = _procesar_un_proceso(page, context, proceso, db, timeout_seconds, resolver_captcha_manual=True)
+            resultado["proceso_id"] = proceso.id
+            resultado["numero_proceso"] = proceso.numero_proceso
+            resultados.append(resultado)
+
+            status = "OK" if resultado.get("ok") else "ERROR"
+            descargados = resultado.get("descargados", 0)
+            errores = resultado.get("errores", 0)
+            print(f"   → {status} | {descargados} descargados, {errores} errores | {resultado.get('error', '')}")
+
+        print("\n" + "=" * 60)
+        print("Batch finalizado.")
+        print("=" * 60)
+        return resultados
+
+    except Exception as exc:
+        logger.exception("Error en batch scraper SECOP II: %s", exc)
+        resultados.append({"ok": False, "error": str(exc)})
+        return resultados
 
     finally:
         if context:

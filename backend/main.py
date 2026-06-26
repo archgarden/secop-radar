@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from database import Base, SessionLocal, engine, get_db
 from models import AnalisisProceso, Cliente, Documento, DocumentoProceso, LogEjecucion, Proceso, ProcesoCliente
-from preseleccion import analizar_preseleccion
+from preseleccion import analizar_preseleccion, cargar_core_documentos
 from notificaciones import enviar_alerta_nuevos_procesos
 from radar import consultar_contratos_similares, correr_radar
 from analizador_pliego import analizar_pliego
@@ -125,6 +125,7 @@ class ClienteUpdate(BaseModel):
     indicadores_financieros: list[str] | None = None
     capacidad_residual_pct: float | None = None
     contratos_vigentes_valor: int | None = None
+    documentos_no_aplica: list[str] | None = None
 
 
 class ClienteOut(BaseModel):
@@ -143,6 +144,7 @@ class ClienteOut(BaseModel):
     indicadores_financieros: str | None
     capacidad_residual_pct: float | None
     contratos_vigentes_valor: int | None
+    documentos_no_aplica: str
     activo: bool
 
     class Config:
@@ -313,6 +315,8 @@ def actualizar_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = De
         cliente.unspsc_codes = json.dumps(payload.unspsc_codes)
     if payload.indicadores_financieros is not None:
         cliente.indicadores_financieros = json.dumps(payload.indicadores_financieros)
+    if payload.documentos_no_aplica is not None:
+        cliente.documentos_no_aplica = json.dumps(payload.documentos_no_aplica)
 
     db.commit()
     db.refresh(cliente)
@@ -545,6 +549,70 @@ def perfil_cliente(cliente_id: int, db: Session = Depends(get_db)):
     return consolidar_perfil(cliente_id, db)
 
 
+class DocumentosNoAplicaUpdate(BaseModel):
+    documentos_no_aplica: list[str]
+
+
+@app.get("/clientes/{cliente_id}/core-documentos")
+def core_documentos_cliente(cliente_id: int, db: Session = Depends(get_db)):
+    """Devuelve el Core de Documentos Base Fijos marcando los documentos
+    que el cliente tiene configurados como 'no aplica'."""
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    no_aplica = _parse_json_lista(cliente.documentos_no_aplica)
+    core = cargar_core_documentos()
+    if not core:
+        raise HTTPException(status_code=503, detail="Core de documentos no disponible")
+
+    resultado = {}
+    for categoria, documentos in core.items():
+        if categoria in ("version", "fecha_generacion", "fuente", "procesos_analizados", "umbrales", "requisitos_estructurados"):
+            resultado[categoria] = documentos
+            continue
+        resultado[categoria] = []
+        for doc in documentos:
+            doc_con_estado = dict(doc)
+            doc_con_estado["no_aplica"] = doc.get("id") in no_aplica
+            resultado[categoria].append(doc_con_estado)
+    return resultado
+
+
+@app.put("/clientes/{cliente_id}/documentos-no-aplica")
+def actualizar_documentos_no_aplica(
+    cliente_id: int,
+    payload: DocumentosNoAplicaUpdate,
+    db: Session = Depends(get_db),
+):
+    """Actualiza la lista de documentos del Core marcados como 'no aplica'
+    para el cliente. Recibe una lista de IDs de documentos base fijos."""
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    # Validar que los IDs existan en el Core
+    core = cargar_core_documentos()
+    ids_core = set()
+    for categoria, documentos in core.items():
+        if not isinstance(documentos, list):
+            continue
+        for doc in documentos:
+            ids_core.add(doc.get("id"))
+
+    invalidos = [doc_id for doc_id in payload.documentos_no_aplica if doc_id not in ids_core]
+    if invalidos:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Documentos no válidos: {', '.join(invalidos)}",
+        )
+
+    cliente.documentos_no_aplica = json.dumps(payload.documentos_no_aplica)
+    db.commit()
+    db.refresh(cliente)
+    return {"cliente_id": cliente_id, "documentos_no_aplica": payload.documentos_no_aplica}
+
+
 class RecomendacionOut(BaseModel):
     perfil_completo: bool
     departamentos: list[str]
@@ -730,6 +798,24 @@ def obtener_preseleccion(proceso_id: int, cliente_id: int, db: Session = Depends
     return _analisis_to_out(analisis)
 
 
+@app.get("/core-documentos")
+def obtener_core_documentos(categoria: str | None = None):
+    """Devuelve el Core de Documentos Base Fijos generado del análisis masivo.
+
+    - categoria: proponente | pliego | calidad. Si no se envía, retorna todas.
+    """
+    core = cargar_core_documentos()
+    if not core:
+        raise HTTPException(status_code=503, detail="Core de documentos no disponible")
+
+    if categoria:
+        if categoria not in core:
+            raise HTTPException(status_code=400, detail=f"Categoría inválida: {categoria}")
+        return {"categoria": categoria, "documentos": core[categoria]}
+
+    return core
+
+
 # ---------- Análisis de pliego ----------
 
 
@@ -743,6 +829,8 @@ class PliegoOut(BaseModel):
     score_pliego: int
     requisitos: list[dict]
     cumplimiento: list[dict]
+    requisitos_estructurados: dict = {}
+    resumen_requisitos: list[dict] = []
     error: str | None = None
 
 
@@ -782,6 +870,8 @@ def obtener_pliego_endpoint(proceso_id: int, cliente_id: int, db: Session = Depe
         score_pliego=analisis.score_pliego,
         requisitos=pliego_meta.get("requisitos", []),
         cumplimiento=pliego.get("cumplimiento", []),
+        requisitos_estructurados=pliego.get("requisitos_estructurados", {}),
+        resumen_requisitos=pliego.get("resumen_requisitos", []),
     )
 
 

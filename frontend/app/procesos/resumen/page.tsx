@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import StepIndicator from '@/components/StepIndicator'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -276,6 +276,7 @@ function CaptchaModal({ proceso, onDescargar, onVolver, descargando, mensaje }: 
 
 function ResumenContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const clienteId = searchParams.get('cliente_id')
   const procesoId = searchParams.get('proceso_id')
 
@@ -341,11 +342,14 @@ function ResumenContent() {
       clearTimeout(timeoutId)
       const data = await r.json()
       if (!r.ok) throw new Error(data.detail || JSON.stringify(data))
-      setMsgDescarga(`Descarga finalizada: ${data.descargados} documento(s) descargado(s), ${data.errores} error(es).`)
+      setMsgDescarga(`Descarga finalizada: ${data.descargados} documento(s) descargado(s), ${data.errores} error(es). Redirigiendo al análisis de pliego...`)
       const docs = await fetch(`${API}/procesos/${procesoId}/documentos`).then(r => r.json())
       setDocumentos(docs)
       if (data.descargados > 0) {
-        setTimeout(() => setMostrarCaptchaModal(false), 1500)
+        setTimeout(() => {
+          setMostrarCaptchaModal(false)
+          router.push(`/pliego?cliente_id=${clienteId}&proceso_id=${procesoId}`)
+        }, 1500)
       }
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') {

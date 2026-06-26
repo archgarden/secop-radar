@@ -95,8 +95,40 @@ def _extraer_texto_escaneado_pdf(path: str) -> str:
     return "\n".join(textos)
 
 
+def _extraer_docx(path: str) -> str:
+    try:
+        from docx import Document
+        doc = Document(path)
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    except Exception as exc:
+        return f"[Error leyendo DOCX: {exc}]"
+
+
+def _extraer_xlsx(path: str) -> str:
+    textos = []
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(path, data_only=True)
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows(values_only=True):
+                celdas = [str(c) for c in row if c is not None]
+                if celdas:
+                    textos.append(" ".join(celdas))
+    except Exception as exc:
+        textos.append(f"[Error leyendo XLSX: {exc}]")
+    return "\n".join(textos)
+
+
+def _extraer_txt(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read()
+    except Exception as exc:
+        return f"[Error leyendo TXT: {exc}]"
+
+
 def extraer_texto(path: str) -> str:
-    """Extrae todo el texto posible de un archivo PDF o imagen."""
+    """Extrae todo el texto posible de un archivo PDF, imagen, DOCX, XLSX o TXT."""
     ext = Path(path).suffix.lower()
 
     if ext == ".pdf":
@@ -114,6 +146,15 @@ def extraer_texto(path: str) -> str:
         except Exception as exc:
             return f"[Error leyendo imagen: {exc}]"
 
+    if ext == ".docx":
+        return _extraer_docx(path)
+
+    if ext == ".xlsx":
+        return _extraer_xlsx(path)
+
+    if ext == ".txt":
+        return _extraer_txt(path)
+
     return ""
 
 
@@ -127,6 +168,8 @@ def normalizar_texto(texto: str) -> str:
     texto = re.sub(r"[óòöô]", "o", texto)
     texto = re.sub(r"[úùüû]", "u", texto)
     texto = re.sub(r"[ñ]", "n", texto)
-    texto = re.sub(r"[^a-z0-9$.,:/\-_%\s]", " ", texto)
-    texto = re.sub(r"\s+", " ", texto)
+    texto = re.sub(r"[^a-z0-9$.,:/\-_@%\s]", " ", texto)
+    # Colapsar espacios horizontales pero preservar saltos de línea para búsquedas por línea
+    texto = re.sub(r"[^\S\n]+", " ", texto)
+    texto = re.sub(r"\n+", "\n", texto)
     return texto.strip()

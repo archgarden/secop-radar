@@ -38,6 +38,10 @@ class Cliente(Base):
     capacidad_residual_pct = Column(Float, nullable=True)
     contratos_vigentes_valor = Column(Integer, nullable=True)
 
+    # Documentos del Core marcados como "no aplica" para este cliente.
+    # Lista JSON de IDs de documentos base fijos (ej. ["plan_manejo_transito"]).
+    documentos_no_aplica = Column(Text, nullable=False, default="[]")
+
     activo = Column(Boolean, nullable=False, default=True)
     fecha_creacion = Column(DateTime, nullable=False, default=datetime.utcnow)
 
@@ -134,6 +138,7 @@ class DocumentoProceso(Base):
     es_pliego = Column(Boolean, nullable=False, default=False)
     estado = Column(String, nullable=False, default="descargado")
     error = Column(Text, nullable=True)
+    texto_extraido = Column(Text, nullable=True)
     fecha_descarga = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     proceso = relationship("Proceso", backref="documentos")
