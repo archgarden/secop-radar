@@ -261,6 +261,66 @@ def normalizar_nombre(nombre: str) -> str:
     return n
 
 
+def _score_pliego(nombre: str) -> int:
+    """Puntúa qué tan probable es que un documento sea el pliego/base del proceso."""
+    n = normalizar_nombre(nombre)
+
+    # Descartes fuertes: estos documentos nunca son el pliego principal.
+    descartes = [
+        "adenda", "observacion", "observación", "resolucion", "resolución",
+        "propuesta", "evaluacion", "evaluación", "cronograma", "visita",
+        "convocatoria", "aviso", "invitacion", "invitación", "acta",
+        "apertura", "adjudicacion", "adjudicación", "minuta", "pacto",
+        "glosario", "autorizacion", "autorización", "certificacion", "certificación",
+        "formato", "matriz", "anexo 3", "anexo 4", "anexo 5",
+        "cpd", "cdp", "pago", "listado", "planos", "plano",
+    ]
+    if any(d in n for d in descartes):
+        return -1
+
+    # Términos que indican el pliego/base principal, ordenados por peso.
+    pesos = [
+        ("pliego de condiciones", 100),
+        ("documento base", 95),
+        ("bases de licitacion", 90),
+        ("bases de seleccion", 90),
+        ("terminos de referencia", 85),
+        ("términos de referencia", 85),
+        ("estudios previos", 80),
+        ("estudio previo", 80),
+        ("analisis del sector", 75),
+        ("análisis del sector", 75),
+        ("pliego", 70),
+        ("condiciones", 60),
+        ("terminos", 50),
+        ("términos", 50),
+        ("base", 40),
+    ]
+    score = 0
+    for termino, peso in pesos:
+        if termino in n:
+            score = max(score, peso)
+    return score
+
+
+def seleccionar_mejor_pliego(docs_proceso: list) -> DocumentoProceso | None:
+    """Elige el documento más probable de ser el pliego/base del proceso."""
+    candidatos = []
+    for doc in docs_proceso:
+        if doc.estado != "descargado" or not doc.path or not Path(doc.path).exists():
+            continue
+        score = _score_pliego(doc.nombre)
+        if score > 0:
+            candidatos.append((score, doc))
+
+    if not candidatos:
+        return None
+
+    # Elegir el de mayor score; en empate, preferir el más grande (suele ser el pliego completo).
+    candidatos.sort(key=lambda x: (x[0], x[1].size_bytes), reverse=True)
+    return candidatos[0][1]
+
+
 def documento_cubre_requisito(req: dict, documentos: list[Documento]) -> Documento | None:
     """Busca un documento del cliente que parezca cubrir el requisito."""
     req_nombre = normalizar_nombre(req["nombre"])
@@ -303,15 +363,13 @@ def analizar_pliego(proceso_id: int, cliente_id: int, db: Session) -> dict:
 
     docs_proceso = (
         db.query(DocumentoProceso)
-        .filter(DocumentoProceso.proceso_id == proceso_id, DocumentoProceso.es_pliego == True)
+        .filter(DocumentoProceso.proceso_id == proceso_id, DocumentoProceso.estado == "descargado")
         .all()
     )
-    for doc in docs_proceso:
-        if doc.estado == "descargado" and doc.path and Path(doc.path).exists():
-            pliego_doc = doc
-            pliego_path = doc.path
-            pliego_nombre = doc.nombre
-            break
+    pliego_doc = seleccionar_mejor_pliego(docs_proceso)
+    if pliego_doc:
+        pliego_path = pliego_doc.path
+        pliego_nombre = pliego_doc.nombre
 
     # Si no hay pliego descargado, buscamos entre los documentos subidos por el cliente.
     if not pliego_path:

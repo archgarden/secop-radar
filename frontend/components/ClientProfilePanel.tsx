@@ -178,13 +178,28 @@ export default function ClientProfilePanel({ clienteId, compact = false, onLoade
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
               <div style={{ fontSize: 9, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>Fuentes de los datos extraídos</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {Object.entries(perfil.fuentes).map(([campo, archivo]) => (
-                  <div key={campo} style={{ fontSize: 10, color: 'var(--text-sec)' }}>
-                    <span style={{ color: 'var(--text)', fontWeight: 500 }}>{campo.replace(/_/g, ' ')}</span>
-                    {' · '}
-                    <span style={{ fontFamily: 'monospace', opacity: .8 }}>{archivo}</span>
-                  </div>
-                ))}
+                {Object.entries(perfil.fuentes).map(([campo, archivo]) => {
+                  const label = campo.replace(/_/g, ' ')
+                  // La experiencia puede venir como array de contratos; mostrar resumen.
+                  if (campo === 'experiencia' && Array.isArray(archivo)) {
+                    return (
+                      <div key={campo} style={{ fontSize: 10, color: 'var(--text-sec)' }}>
+                        <span style={{ color: 'var(--text)', fontWeight: 500 }}>{label}</span>
+                        {' · '}
+                        <span style={{ fontFamily: 'monospace', opacity: .8 }}>{archivo.length} contratos desde RUP</span>
+                      </div>
+                    )
+                  }
+                  // Cualquier otro valor no string se convierte a texto seguro.
+                  const valor = typeof archivo === 'string' ? archivo : JSON.stringify(archivo)
+                  return (
+                    <div key={campo} style={{ fontSize: 10, color: 'var(--text-sec)' }}>
+                      <span style={{ color: 'var(--text)', fontWeight: 500 }}>{label}</span>
+                      {' · '}
+                      <span style={{ fontFamily: 'monospace', opacity: .8 }}>{valor}</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

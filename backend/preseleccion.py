@@ -388,14 +388,37 @@ def analizar_preseleccion(proceso_id: int, cliente_id: int, db: Session) -> Anal
 
     docs_requeridos_core = _documentos_requeridos_core(core_documentos_con_estado)
 
+    def _es_documento_experiencia(doc: dict[str, Any]) -> bool:
+        texto = " ".join([doc.get("nombre", ""), *doc.get("keywords", [])]).lower()
+        return any(p in texto for p in [
+            "experiencia", "matriz 1", "formato 3", "certificado de experiencia",
+        ])
+
+    def _es_documento_financiero(doc: dict[str, Any]) -> bool:
+        texto = " ".join([doc.get("nombre", ""), *doc.get("keywords", [])]).lower()
+        return any(p in texto for p in [
+            "estados financieros", "capacidad financiera", "matriz 2", "indicadores financieros",
+        ])
+
+    tiene_experiencia_acreditada = (perfil.get("experiencia_cantidad") or 0) > 0
+    tiene_indicadores_financieros = bool(perfil.get("indicadores_financieros"))
+
     if docs_requeridos_core:
         docs_requeridos_core = [
             d for d in docs_requeridos_core if d.get("id") not in documentos_no_aplica
         ]
         documentos_requeridos = [d["nombre"] for d in docs_requeridos_core]
-        documentos_faltantes = [
-            d["nombre"] for d in docs_requeridos_core if not _documento_cubre_requerido(d, documentos_subidos)
-        ]
+        documentos_faltantes = []
+        for d in docs_requeridos_core:
+            if _documento_cubre_requerido(d, documentos_subidos):
+                continue
+            # Si ya hay experiencia acreditada, no exigir documentos de experiencia adicionales.
+            if _es_documento_experiencia(d) and tiene_experiencia_acreditada:
+                continue
+            # Si ya hay indicadores financieros declarados, no exigir documentos financieros adicionales.
+            if _es_documento_financiero(d) and tiene_indicadores_financieros:
+                continue
+            documentos_faltantes.append(d["nombre"])
     else:
         documentos_requeridos = DOCUMENTOS_REQUERIDOS
         documentos_faltantes = [

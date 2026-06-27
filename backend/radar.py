@@ -362,32 +362,11 @@ def correr_radar(cliente_id: int, db: Session) -> list[Proceso]:
             "Radar terminó OK: %d nuevos de %d encontrados", len(nuevos), encontrados
         )
 
-        # Descarga automática de documentos para procesos nuevos (opcional).
-        if os.getenv("SCOP_SCRAPER_ENABLED", "false").lower() in ("true", "1", "yes"):
-            logger.info("Scraper habilitado. Intentando descargar documentos de %d procesos nuevos", len(nuevos))
-            for proceso in nuevos:
-                try:
-                    from secop_scraper import descargar_documentos_proceso
-                    resultado = descargar_documentos_proceso(proceso, db)
-                    if resultado.get("ok"):
-                        logger.info(
-                            "Documentos descargados para %s: %d ok, %d errores",
-                            proceso.numero_proceso,
-                            resultado.get("descargados", 0),
-                            resultado.get("errores", 0),
-                        )
-                    else:
-                        logger.warning(
-                            "No se descargaron documentos de %s: %s",
-                            proceso.numero_proceso,
-                            resultado.get("error"),
-                        )
-                except Exception as exc:
-                    logger.exception(
-                        "Error descargando documentos del proceso %s: %s",
-                        proceso.numero_proceso,
-                        exc,
-                    )
+        # NOTA: La descarga automática de documentos fue deshabilitada en el radar.
+        # Los documentos de SECOP II solo se descargan bajo demanda cuando el usuario
+        # hace clic en "Ver pliego detallado" / "Descargar documentos" para un
+        # proceso específico (endpoint /procesos/{id}/descargar-documentos).
+        # Esto evita abrir múltiples navegadores/CAPTCHAs por cada ejecución del radar.
 
     except Exception as exc:
         db.rollback()

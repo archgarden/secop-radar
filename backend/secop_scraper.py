@@ -64,6 +64,21 @@ def _safe_filename(name: str, fallback: str, idx: int) -> str:
     return name
 
 
+def _unique_dest_path(output_dir: Path, filename: str) -> Path:
+    """Devuelve una ruta única, agregando (1), (2), etc. si ya existe."""
+    dest = output_dir / filename
+    if not dest.exists():
+        return dest
+    stem = Path(filename).stem
+    suffix = Path(filename).suffix
+    counter = 1
+    while True:
+        candidate = output_dir / f"{stem}({counter}){suffix}"
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
 def _set_extension(name: str, ext: str) -> str:
     """Reemplaza o agrega una extensión de archivo de forma segura.
 
@@ -77,23 +92,106 @@ def _set_extension(name: str, ext: str) -> str:
     return f"{stem}{ext}"
 
 
+def _detect_ooxml_extension(content: bytes) -> str | None:
+    """Detecta si un archivo OOXML (ZIP) es docx o xlsx inspeccionando su contenido."""
+    try:
+        import zipfile
+        import io
+        with zipfile.ZipFile(io.BytesIO(content)) as z:
+            names = set(z.namelist())
+            if "word/document.xml" in names:
+                return ".docx"
+            if "xl/workbook.xml" in names:
+                return ".xlsx"
+            # Fallback: leer [Content_Types].xml
+            if "[Content_Types].xml" in names:
+                ct = z.read("[Content_Types].xml").decode("utf-8", errors="ignore").lower()
+                if "wordprocessingml" in ct:
+                    return ".docx"
+                if "spreadsheetml" in ct:
+                    return ".xlsx"
+    except Exception:
+        pass
+    return None
+
+
 def _is_pliego(nombre: str) -> bool:
-    """Heurística para detectar si un documento es el pliego de condiciones."""
-    # Normalizar separadores para que "documento_base" cuente como "documento base".
-    nombre_norm = re.sub(r"[_.\-]+", " ", nombre.lower())
-    return any(
-        palabra in nombre_norm
-        for palabra in [
-            "pliego",
-            "condiciones",
-            "terminos",
-            "términos",
-            "base",
-            "bases",
-            "documento base",
-            "documento base de contratacion",
-        ]
-    )
+    """Heurística para detectar si un documento es el pliego de condiciones.
+
+    Busca nombres que claramente sean el pliego/base/terminos de referencia
+    y descarta documentos derivados (adendas, observaciones, resoluciones,
+    propuestas, etc.).
+    """
+    n = nombre.lower()
+    n_norm = re.sub(r"[_.\-]+", " ", n)
+
+    # Palabras que suelen indicar que NO es el pliego principal.
+    descartes = [
+        "adenda", "observacion", "observación", "resolucion", "resolución",
+        "propuesta", "evaluacion", "evaluación", "cronograma", "visita",
+        "convocatoria", "aviso", "invitacion", "invitación", "acta",
+        "apertura", "adjudicacion", "adjudicación", "minuta", "pacto",
+        "glosario", "autorizacion", "autorización", "certificacion", "certificación",
+        "formato", "matriz", "anexo 3", "anexo 4", "anexo 5",
+        "cpd", "cdp", "pago", "listado", "planos",
+    ]
+    if any(d in n for d in descartes):
+        return False
+
+    # Términos que sí indican pliego/base del proceso.
+    terminos_pliego = [
+        "pliego",
+        "condiciones",
+        "terminos de referencia",
+        "términos de referencia",
+        "documento base",
+        "documento base de contratacion",
+        "bases de licitacion",
+        "bases de licitación",
+        "bases de seleccion",
+        "bases de selección",
+        "estudios previos",
+        "estudio previo",
+        "analisis del sector",
+        "análisis del sector",
+        "programa de",
+    ]
+    return any(t in n_norm for t in terminos_pliego)
+
+
+def _prioridad_documento(nombre: str) -> int:
+    """Asigna una prioridad mayor a documentos clave para el análisis de pliego."""
+    n = nombre.lower()
+    # Pliego / documento base es lo más importante.
+    if _is_pliego(nombre):
+        return 100
+    # Anexos técnicos y especificaciones.
+    if "anexo tecnico" in n or "anexo técnico" in n or "especificaciones tecnicas" in n or "especificaciones técnicas" in n:
+        return 95
+    # Documento técnico y documentos de viabilidad.
+    if "documento tecnico" in n or "documento técnico" in n or "viabilidad" in n:
+        return 90
+    # Matrices de experiencia e indicadores.
+    if "matriz 1" in n or "matriz-1" in n or "matriz1" in n or "experiencia" in n:
+        return 85
+    if "matriz 2" in n or "matriz-2" in n or "matriz2" in n or "indicadores financieros" in n:
+        return 84
+    # Formatos oficiales.
+    if "formato 3" in n or "formato 4" in n:
+        return 80
+    if n.startswith("formato "):
+        return 75
+    # Presupuesto, análisis de precios, cronograma.
+    if "presupuesto" in n or "analisis de precios" in n or "análisis de precios" in n or "cronograma" in n:
+        return 70
+    # Certificaciones y otros anexos.
+    if "certificacion" in n or "certificación" in n:
+        return 60
+    # Planos (menos prioritarios que el pliego, pero aún útiles).
+    if "plano" in n:
+        return 40
+    # Resto.
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -277,41 +375,67 @@ def _extract_document_links(page) -> list[dict]:
     page.wait_for_load_state("networkidle", timeout=60000)
     time.sleep(3)
 
-    # SECOP II carga todos los documentos en el DOM; no es necesario cambiar de pestaña.
-    # La tabla de documentos tiene id grdGridDocumentList.
-    document_data = page.eval_on_selector_all(
+    # Intentar varios selectores porque SECOP II cambia los ids según la vista.
+    selectors = [
         'table#grdGridDocumentList_tbl tbody tr[id^="grdGridDocumentList_tr"]',
-        """rows => rows.map((row, idx) => {
-            const nameSpan = row.querySelector('span[id^="tdColumnDocumentNameP2Gen_spnDocumentName_"]');
-            const link = row.querySelector('a[id^="lnkDownloadLinkP3Gen_"]');
-            const onclick = link ? link.getAttribute('onclick') : '';
-            const idMatch = onclick.match(/documentFileId='\s*\+\s*'(\d+)'/);
-            const mkeyMatch = onclick.match(/[&?]mkey=([a-f0-9\-_]+)/);
-            return {
-                text: nameSpan ? nameSpan.innerText.trim() : `documento_${idx}`,
-                documentFileId: idMatch ? idMatch[1] : null,
-                mkey: mkeyMatch ? mkeyMatch[1] : null,
-                onclick: onclick
-            };
-        })""",
-    )
+        'table[id*="DocumentList"] tbody tr',
+        'table tbody tr',
+    ]
+
+    document_data = []
+    for selector in selectors:
+        try:
+            rows = page.query_selector_all(selector)
+            logger.info("Selector %s encontró %d filas", selector, len(rows))
+            if not rows:
+                continue
+            document_data = page.eval_on_selector_all(
+                selector,
+                """rows => rows.map((row, idx) => {
+                    // Buscar nombre en varios posibles spans/celdas.
+                    const nameSpan = row.querySelector('span[id*="DocumentName"]')
+                        || row.querySelector('span[id*="spnDocument"]')
+                        || row.querySelector('td:nth-child(2)');
+                    const link = row.querySelector('a[onclick*="DownloadFile"]')
+                        || row.querySelector('a[id*="DownloadLink"]')
+                        || row.querySelector('a');
+                    const onclick = link ? link.getAttribute('onclick') || '' : '';
+                    const idMatch = onclick.match(/documentFileId='\\s*\\+\\s*'(\d+)'/)
+                        || onclick.match(/documentFileId=(\d+)/);
+                    const mkeyMatch = onclick.match(/[&?]mkey=([a-f0-9\\-_]+)/);
+                    return {
+                        text: nameSpan ? (nameSpan.innerText || nameSpan.textContent || '').trim() : `documento_${idx}`,
+                        documentFileId: idMatch ? idMatch[1] : null,
+                        mkey: mkeyMatch ? mkeyMatch[1] : null,
+                        onclick: onclick
+                    };
+                })""",
+            )
+            if document_data:
+                break
+        except Exception as exc:
+            logger.warning("Selector %s falló: %s", selector, exc)
+            continue
 
     base_url = "https://community.secop.gov.co/Public/Tendering/OpportunityDetail/DownloadFile"
     links = []
     for item in document_data:
         doc_id = item.get("documentFileId")
         mkey = item.get("mkey")
+        text = item.get("text") or "documento"
         if doc_id and mkey:
             href = f"{base_url}?documentFileId={doc_id}&mkey={mkey}"
             links.append({
-                "text": item["text"],
+                "text": text,
                 "href": href,
                 "documentFileId": doc_id,
                 "mkey": mkey,
             })
+            logger.info("Link encontrado: %s -> %s", text, href)
 
     logger.info("Documentos encontrados: %d", len(links))
     return links
+
 
 
 def _resolve_real_download(session: requests.Session, initial_href: str, headers: dict) -> tuple[bytes, str | None, str]:
@@ -345,9 +469,137 @@ def _resolve_real_download(session: requests.Session, initial_href: str, headers
     return content, None, content_type
 
 
-def _download_files(document_links: list[dict], output_dir: Path, context) -> list[dict]:
-    """Descarga los documentos usando las cookies de la sesión de Playwright."""
+def _download_files(document_links: list[dict], output_dir: Path, context, page=None, max_docs: int | None = None) -> list[dict]:
+    """Descarga los documentos reutilizando la sesión de Playwright.
+
+    Primero intenta descargar con el navegador (usando el evento `download`)
+    para aprovechar la sesión ya validada con CAPTCHA. Si falla, usa
+    requests.Session con las cookies como fallback.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if max_docs is not None and max_docs > 0:
+        total_links = document_links[:max_docs]
+        logger.info("Limitando descarga a %d de %d documentos", len(total_links), len(document_links))
+    else:
+        total_links = document_links
+
+    # Preferir descarga vía navegador si tenemos la página activa.
+    if page is not None:
+        try:
+            return _download_files_with_browser(total_links, output_dir, page)
+        except Exception as exc:
+            logger.warning("Descarga vía navegador falló, usando fallback HTTP: %s", exc)
+
+    return _download_files_with_requests(total_links, output_dir, context)
+
+
+def _resolve_secop_download_body(page, initial_href: str) -> tuple[bytes, str]:
+    """Obtiene el cuerpo binario real de un documento SECOP II.
+
+    SECOP II responde al endpoint DownloadFile con un HTML que contiene un
+    JavaScript de redirección hacia /Public/Archive/RetrieveFile/Index. Esta
+    función sigue esa redirección usando el contexto HTTP de Playwright.
+    """
+    response = page.request.get(initial_href, timeout=60000)
+    if not response.ok:
+        raise RuntimeError(f"HTTP {response.status}: {response.text()[:200]}")
+
+    content = response.body()
+    content_type = response.headers.get("content-type", "").lower()
+
+    # Si ya es binario, retornar.
+    if "html" not in content_type and len(content) > 1000:
+        return content, content_type
+
+    text = content.decode("utf-8", errors="ignore")
+    match = re.search(r"/Public/Archive/RetrieveFile/Index\?([^'""<>\s]+)", text)
+    if match:
+        retrieve_url = "https://community.secop.gov.co/Public/Archive/RetrieveFile/Index?" + match.group(1)
+        logger.info("Siguiendo redirección SECOP: %s", retrieve_url)
+        r2 = page.request.get(retrieve_url, timeout=60000)
+        if not r2.ok:
+            raise RuntimeError(f"HTTP {r2.status} en redirección: {r2.text()[:200]}")
+        return r2.body(), r2.headers.get("content-type", "").lower()
+
+    return content, content_type
+
+
+def _download_files_with_browser(document_links: list[dict], output_dir: Path, page) -> list[dict]:
+    """Descarga documentos usando el contexto HTTP de Playwright.
+
+    Al reutilizar la misma página que ya superó el CAPTCHA, las peticiones
+    salen con las cookies de sesión validadas y SECOP II normalmente no
+    vuelve a pedir CAPTCHA por cada archivo.
+    """
+    results = []
+
+    for idx, link in enumerate(document_links, start=1):
+        href = link["href"]
+        text = link.get("text") or f"documento_{idx}"
+        safe_name = _safe_filename(None, text, idx)
+        if not Path(safe_name).suffix:
+            safe_name += ".pdf"
+        dest_path = output_dir / safe_name
+
+        logger.info("Descargando con navegador [%d/%d] %s", idx, len(document_links), safe_name)
+
+        try:
+            content, content_type = _resolve_secop_download_body(page, href)
+
+            # Ajustar extensión según Content-Type (más confiable) o magic bytes.
+            if "pdf" in content_type:
+                safe_name = _set_extension(safe_name, ".pdf")
+                dest_path = output_dir / safe_name
+            elif "excel" in content_type or "spreadsheet" in content_type:
+                safe_name = _set_extension(safe_name, ".xlsx")
+                dest_path = output_dir / safe_name
+            elif "word" in content_type or "document" in content_type:
+                safe_name = _set_extension(safe_name, ".docx")
+                dest_path = output_dir / safe_name
+            elif content[:4] == b"%PDF":
+                safe_name = _set_extension(safe_name, ".pdf")
+                dest_path = output_dir / safe_name
+            elif content[:4] == b"PK\x03\x04":
+                # Office Open XML: inspeccionar el ZIP para distinguir docx/xlsx.
+                ext = _detect_ooxml_extension(content)
+                if ext:
+                    safe_name = _set_extension(safe_name, ext)
+                    dest_path = output_dir / safe_name
+            elif content[:5].lower() == b"<?xml" or content[:4].lower() == b"<htm":
+                # Si SECOP sigue devolviendo HTML, es probablemente una página de error/CAPTCHA.
+                raise RuntimeError(f"Respuesta HTML inesperada ({len(content)} bytes): {content[:200]}")
+
+            dest_path = _unique_dest_path(output_dir, safe_name)
+            safe_name = dest_path.name
+            with open(dest_path, "wb") as f:
+                f.write(content)
+
+            results.append({
+                "nombre": text,
+                "filename": safe_name,
+                "path": str(dest_path),
+                "url": href,
+                "size_bytes": len(content),
+                "ok": True,
+            })
+        except Exception as exc:
+            logger.exception("Error descargando %s con navegador", href)
+            results.append({
+                "nombre": text,
+                "filename": safe_name,
+                "path": None,
+                "url": href,
+                "size_bytes": 0,
+                "ok": False,
+                "error": str(exc),
+            })
+
+    return results
+
+
+def _download_files_with_requests(document_links: list[dict], output_dir: Path, context) -> list[dict]:
+    """Descarga los documentos usando requests.Session con las cookies de Playwright."""
     results = []
     session = requests.Session()
 
@@ -374,7 +626,7 @@ def _download_files(document_links: list[dict], output_dir: Path, context) -> li
             safe_name += ".pdf"
 
         dest_path = output_dir / safe_name
-        logger.info("Descargando [%d/%d] %s", idx, len(document_links), safe_name)
+        logger.info("Descargando con requests [%d/%d] %s", idx, len(document_links), safe_name)
 
         try:
             content, real_url, content_type = _resolve_real_download(session, href, headers)
@@ -390,6 +642,8 @@ def _download_files(document_links: list[dict], output_dir: Path, context) -> li
                 safe_name = _set_extension(safe_name, ".docx")
                 dest_path = output_dir / safe_name
 
+            dest_path = _unique_dest_path(output_dir, safe_name)
+            safe_name = dest_path.name
             with open(dest_path, "wb") as f:
                 f.write(content)
             results.append({
@@ -438,6 +692,14 @@ def _procesar_un_proceso(
         output_base = (Path(__file__).resolve().parent / output_base).resolve()
     output_dir = output_base / str(proceso.id)
 
+    # Limpiar descargas previas de este proceso para evitar duplicados y
+    # archivos corruptos (p. ej. HTMLs de redirección de intentos fallidos).
+    logger.info("Limpiando documentos previos del proceso %s", proceso.id)
+    db.query(DocumentoProceso).filter(DocumentoProceso.proceso_id == proceso.id).delete()
+    db.commit()
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+
     detail_url = f"{BASE_DETAIL_URL}?noticeUID={notice_uid}"
 
     try:
@@ -461,7 +723,19 @@ def _procesar_un_proceso(
         if not document_links:
             return {"ok": True, "descargados": 0, "errores": 0, "documentos": []}
 
-        downloaded = _download_files(document_links, output_dir, context)
+        # Ordenar por relevancia para asegurar que el pliego, anexos técnicos,
+        # matrices y formatos entren dentro del límite.
+        document_links = sorted(
+            document_links,
+            key=lambda link: _prioridad_documento(link.get("text", "")),
+            reverse=True,
+        )
+
+        # Limitar a los documentos más relevantes para evitar decenas de CAPTCHAs
+        # y descargas innecesarias. Con 25 entran pliego, anexos, especificaciones,
+        # matrices de experiencia/indicadores y formatos clave.
+        max_docs = int(os.getenv("SCOP_SCRAPER_MAX_DOCS", "25"))
+        downloaded = _download_files(document_links, output_dir, context, page=page, max_docs=max_docs)
 
         # Persistir en base de datos.
         for item in downloaded:

@@ -331,10 +331,11 @@ function ResumenContent() {
   async function descargarDocumentos() {
     if (!procesoId) return
     setDescargando(true)
-    setMsgDescarga('Se abrió Chrome. Resuelve el CAPTCHA manualmente en la ventana del navegador. Esta operación puede tardar hasta 2 minutos.')
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 130000)
+      setMsgDescarga('Se abrió Chrome. Resuelve el CAPTCHA manualmente en la ventana del navegador. Luego espera a que se descarguen los documentos de ESTE proceso (máx. 15 archivos).')
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 360000)
+
       const r = await fetch(`${API}/procesos/${procesoId}/descargar-documentos`, {
         method: 'POST',
         signal: controller.signal,

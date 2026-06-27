@@ -187,10 +187,25 @@ export default function DocumentosCliente() {
 
   useEffect(() => {
     if (justUploaded && progreso === 100) {
-      const t = setTimeout(() => router.push('/dashboard'), 2500)
+      const t = setTimeout(async () => {
+        // Marcar este cliente como activo antes de volver al dashboard
+        try {
+          await fetch(`${API}/clientes/activo`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cliente_id: parseInt(clienteId, 10) }),
+          })
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('secop-radar-cliente-id', clienteId)
+          }
+        } catch (err) {
+          console.error('Error activando cliente tras subir documentos:', err)
+        }
+        router.push(`/dashboard?cliente_id=${clienteId}`)
+      }, 2500)
       return () => clearTimeout(t)
     }
-  }, [justUploaded, progreso, router])
+  }, [justUploaded, progreso, router, clienteId])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>

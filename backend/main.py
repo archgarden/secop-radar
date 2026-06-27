@@ -14,13 +14,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import Base, SessionLocal, engine, get_db
-from models import AnalisisProceso, Cliente, Documento, DocumentoProceso, LogEjecucion, Proceso, ProcesoCliente
+from models import AnalisisProceso, Cliente, Configuracion, Documento, DocumentoProceso, LogEjecucion, Proceso, ProcesoCliente
 from preseleccion import analizar_preseleccion, cargar_core_documentos
 from notificaciones import enviar_alerta_nuevos_procesos
 from radar import consultar_contratos_similares, correr_radar
 from analizador_pliego import analizar_pliego
 from secop_scraper import descargar_documentos_proceso
-from extraccion.procesador import procesar_documento, consolidar_perfil
+from extraccion.procesador import actualizar_cliente_desde_rup, procesar_documento, consolidar_perfil
 from unspsc import describir_unspsc, limpiar_unspsc
 from calculadoras import (
     calcular_capacidad_financiera,
@@ -246,6 +246,42 @@ def root():
 @app.get("/clientes", response_model=list[ClienteOut])
 def listar_clientes(db: Session = Depends(get_db)):
     return db.query(Cliente).filter(Cliente.activo == True).all()
+
+
+class ClienteActivoOut(BaseModel):
+    cliente_id: int | None
+
+
+class ClienteActivoUpdate(BaseModel):
+    cliente_id: int | None
+
+
+@app.get("/clientes/activo", response_model=ClienteActivoOut)
+def obtener_cliente_activo(db: Session = Depends(get_db)):
+    cfg = db.query(Configuracion).filter(Configuracion.clave == "cliente_activo_id").first()
+    if not cfg or not cfg.valor:
+        return {"cliente_id": None}
+    try:
+        return {"cliente_id": int(cfg.valor)}
+    except ValueError:
+        return {"cliente_id": None}
+
+
+@app.put("/clientes/activo", response_model=ClienteActivoOut)
+def establecer_cliente_activo(payload: ClienteActivoUpdate, db: Session = Depends(get_db)):
+    if payload.cliente_id is not None:
+        cliente = db.query(Cliente).filter(Cliente.id == payload.cliente_id, Cliente.activo == True).first()
+        if not cliente:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado o inactivo")
+
+    cfg = db.query(Configuracion).filter(Configuracion.clave == "cliente_activo_id").first()
+    if cfg:
+        cfg.valor = str(payload.cliente_id) if payload.cliente_id is not None else None
+    else:
+        cfg = Configuracion(clave="cliente_activo_id", valor=str(payload.cliente_id) if payload.cliente_id is not None else None)
+        db.add(cfg)
+    db.commit()
+    return {"cliente_id": payload.cliente_id}
 
 
 @app.post("/clientes", response_model=ClienteOut, status_code=201)
@@ -503,7 +539,13 @@ def subir_documento(
 
     # Extraer información del documento de forma asíncrona al upload.
     try:
-        procesar_documento(doc, db)
+        resultado = procesar_documento(doc, db)
+        # Si el documento es un RUP, actualizar el cliente con los datos extraídos.
+        if resultado.get("tipo_documento") == "rup":
+            try:
+                actualizar_cliente_desde_rup(cliente_id, db)
+            except Exception as exc:
+                logger.exception("Error actualizando cliente desde RUP %s: %s", doc.id, exc)
     except Exception as exc:
         logger.exception("Error extrayendo información del documento %s: %s", doc.id, exc)
 

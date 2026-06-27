@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { Suspense, useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { useSearchParams, useRouter } from 'next/navigation'
 import ClientProfilePanel from '@/components/ClientProfilePanel'
 import ThemeToggle from '@/components/ThemeToggle'
 
@@ -1322,8 +1323,10 @@ function RecomendacionesPanel({ rec, onBuscar, buscando }: { rec: Recomendacione
 }
 
 /* ─── PÁGINA (Dashboard) ────────────────── */
-export default function Dashboard() {
+function DashboardInner() {
   const clock = useClock()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [filtro, setFiltro] = useState('Todos')
   const [filtroDepto, setFiltroDepto] = useState('Todos')
   const [filtroTipo, setFiltroTipo] = useState('Todos')
@@ -1331,6 +1334,7 @@ export default function Dashboard() {
   const [activeId, setActiveId] = useState<number | null>(1)
 
   const [panelOpen, setPanelOpen] = useState(true)
+  const [clientes, setClientes] = useState<ClienteApi[]>([])
   const [cliente, setCliente] = useState<ClienteApi | null>(null)
   const [procesos, setProcesos] = useState<ProcesoData[]>([])
   const [contratos, setContratos] = useState<ContratoApi[]>([])
@@ -1339,32 +1343,105 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [radarLoading, setRadarLoading] = useState(false)
 
+  const CLIENTE_STORAGE_KEY = 'secop-radar-cliente-id'
+
+  function guardarLocalCliente(id: number | null) {
+    if (typeof window === 'undefined') return
+    if (id === null) {
+      localStorage.removeItem(CLIENTE_STORAGE_KEY)
+    } else {
+      localStorage.setItem(CLIENTE_STORAGE_KEY, String(id))
+    }
+  }
+
+  async function guardarClienteActivo(id: number | null) {
+    try {
+      await fetch(`${API}/clientes/activo`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cliente_id: id }),
+      })
+    } catch (err) {
+      // No bloquear la UI si el backend falla; localStorage sigue como fallback.
+      console.error('Error guardando cliente activo:', err)
+    }
+    guardarLocalCliente(id)
+  }
+
+  async function obtenerClienteActivoDesdeBackend(): Promise<number | null> {
+    try {
+      const r = await fetch(`${API}/clientes/activo`)
+      if (!r.ok) return null
+      const data = await r.json()
+      return data.cliente_id ?? null
+    } catch (err) {
+      console.error('Error leyendo cliente activo:', err)
+      return null
+    }
+  }
+
+  function seleccionarCliente(clientesDisponibles: ClienteApi[], idForzado?: number) {
+    if (clientesDisponibles.length === 0) return null
+    if (idForzado) {
+      const porId = clientesDisponibles.find(c => c.id === idForzado)
+      if (porId) return porId
+    }
+    const guardado = typeof window !== 'undefined' ? localStorage.getItem(CLIENTE_STORAGE_KEY) : null
+    if (guardado) {
+      const porId = clientesDisponibles.find(c => String(c.id) === guardado)
+      if (porId) return porId
+    }
+    return clientesDisponibles[0]
+  }
+
+  function cargarCliente(c: ClienteApi) {
+    setCliente(c)
+    guardarLocalCliente(c.id)
+    const parsed = parseCliente(c)
+    setLoading(true)
+    setError('')
+    Promise.all([
+      fetch(`${API}/clientes/${c.id}/procesos`).then(r => r.json()),
+      fetch(`${API}/clientes/${c.id}/contratos-similares`).then(r => r.json()),
+      fetch(`${API}/clientes/${c.id}/recomendaciones`).then(r => r.json()),
+    ])
+      .then(([procesosApi, contratosApi, recomendacionesApi]) => {
+        const mapped = (procesosApi as ProcesoApi[]).map(p => mapearProceso(p, parsed))
+        setProcesos(mapped.sort((a, b) => (b.score || 0) - (a.score || 0)))
+        setContratos(contratosApi as ContratoApi[])
+        setRecomendaciones(recomendacionesApi as RecomendacionesApi)
+        setLoading(false)
+      })
+      .catch(err => { setError(err.message); setLoading(false) })
+  }
+
   useEffect(() => {
     setLoading(true)
-    fetch(`${API}/clientes`)
-      .then(r => r.json())
-      .then((clientes: ClienteApi[]) => {
-        if (clientes.length === 0) {
+    Promise.all([
+      fetch(`${API}/clientes`).then(r => r.json()),
+      obtenerClienteActivoDesdeBackend(),
+    ])
+      .then(([data, activoId]: [ClienteApi[], number | null]) => {
+        setClientes(data)
+        if (data.length === 0) {
           setLoading(false)
           return
         }
-        const c = clientes[0]
-        setCliente(c)
-        const parsed = parseCliente(c)
-        return Promise.all([
-          fetch(`${API}/clientes/${c.id}/procesos`).then(r => r.json()),
-          fetch(`${API}/clientes/${c.id}/contratos-similares`).then(r => r.json()),
-          fetch(`${API}/clientes/${c.id}/recomendaciones`).then(r => r.json()),
-        ]).then(([procesosApi, contratosApi, recomendacionesApi]) => {
-          const mapped = (procesosApi as ProcesoApi[]).map(p => mapearProceso(p, parsed))
-          setProcesos(mapped.sort((a, b) => (b.score || 0) - (a.score || 0)))
-          setContratos(contratosApi as ContratoApi[])
-          setRecomendaciones(recomendacionesApi as RecomendacionesApi)
-          setLoading(false)
-        })
+        // Prioridad: query param > backend > localStorage > primero
+        const queryIdRaw = searchParams.get('cliente_id')
+        const queryId = queryIdRaw ? parseInt(queryIdRaw, 10) : null
+        const c = seleccionarCliente(data, queryId ?? activoId ?? undefined)
+        if (c) {
+          cargarCliente(c)
+          // Sincronizar backend si el query param forzó una selección distinta
+          if (queryId && queryId !== activoId) {
+            guardarClienteActivo(queryId)
+          }
+        }
       })
       .catch(err => { setError(err.message); setLoading(false) })
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   async function correrRadarManual() {
     if (!cliente) return
@@ -1382,6 +1459,22 @@ export default function Dashboard() {
     } finally {
       setRadarLoading(false)
     }
+  }
+
+  async function cambiarCliente(clienteId: string) {
+    const c = clientes.find(x => String(x.id) === clienteId)
+    if (!c) return
+    setActiveId(null)
+    setFiltro('Todos')
+    setFiltroDepto('Todos')
+    setFiltroTipo('Todos')
+    setBusq('')
+    await guardarClienteActivo(c.id)
+    // Reflejar la selección en la URL sin recargar la página
+    const params = new URLSearchParams(window.location.search)
+    params.set('cliente_id', String(c.id))
+    router.replace(`?${params.toString()}`, { scroll: false })
+    cargarCliente(c)
   }
 
   const cTotal = useCounter(procesos.length)
@@ -1514,7 +1607,27 @@ export default function Dashboard() {
             <div style={{ position: 'relative', zIndex: 1, marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 14 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 {cliente ? (
-                  <ClientProfilePanel clienteId={cliente.id} compact />
+                  <>
+                    {clientes.length > 1 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <select
+                          value={cliente.id}
+                          onChange={e => cambiarCliente(e.target.value)}
+                          style={{
+                            background: 'var(--card)aa', backdropFilter: 'blur(6px)',
+                            border: '1px solid var(--orange)', borderRadius: 6,
+                            padding: '6px 12px', color: 'var(--orange)',
+                            fontSize: 12, fontWeight: 600, outline: 'none', cursor: 'pointer',
+                          }}
+                        >
+                          {clientes.map(c => (
+                            <option key={c.id} value={c.id}>{c.nombre} (ID: {c.id})</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <ClientProfilePanel clienteId={cliente.id} compact />
+                  </>
                 ) : (
                   <div style={{ background: 'var(--card)aa', backdropFilter: 'blur(6px)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 18px' }}>
                     <div style={{ fontSize: 13, color: 'var(--text-sec)' }}>Cargando cliente...</div>
@@ -1683,5 +1796,20 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function Dashboard() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Cargando dashboard...</div>
+          <div style={{ fontSize: 12, color: 'var(--text-sec)' }}>SECOP Radar</div>
+        </div>
+      </div>
+    }>
+      <DashboardInner />
+    </Suspense>
   )
 }

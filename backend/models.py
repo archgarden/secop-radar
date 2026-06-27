@@ -161,3 +161,13 @@ class AnalisisProceso(Base):
 
     proceso = relationship("Proceso", backref="analisis")
     cliente = relationship("Cliente", backref="analisis_procesos")
+
+
+class Configuracion(Base):
+    """Preferencias globales de la aplicación (clave-valor)."""
+
+    __tablename__ = "configuracion"
+
+    clave = Column(String, primary_key=True, index=True)
+    valor = Column(Text, nullable=True)
+    fecha_actualizacion = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

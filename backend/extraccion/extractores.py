@@ -142,13 +142,189 @@ def _extraer_lista_departamentos(valor: str | None) -> list[str]:
     if not valor:
         return []
     # Limpiar prefijos y sufijos comunes
-    noise = ["departamento", "departamentos", "de operacion", "operacion", "estado", "activo", "inactivo"]
+    noise = ["departamento", "departamentos", "de operacion", "operacion"]
     cleaned = valor
     for word in noise:
         cleaned = re.sub(rf"\b{re.escape(word)}\b", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"[:\-]", ",", cleaned)
     items = [x.strip() for x in re.split(r"[,;]", cleaned) if x.strip()]
     return [i.title() for i in items]
+
+
+def _extraer_lista_municipios(valor: str | None) -> list[str]:
+    if not valor:
+        return []
+    noise = ["municipio", "municipios", "de operacion", "operacion", "ciudad", "ciudades"]
+    cleaned = valor
+    for word in noise:
+        cleaned = re.sub(rf"\b{re.escape(word)}\b", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"[:\-]", ",", cleaned)
+    items = [x.strip() for x in re.split(r"[,;]", cleaned) if x.strip()]
+    # Excluir códigos numéricos puros (ej: 81001) y dejar solo nombres
+    return [i.title() for i in items if not re.fullmatch(r"\d+", i)]
+
+
+def _extraer_estado_rup(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    valor_norm = normalizar_texto(valor)
+    if re.search(r"\bactivo\b", valor_norm):
+        return "Activo"
+    if re.search(r"\binactivo\b", valor_norm):
+        return "Inactivo"
+    return None
+
+
+def _extraer_tipo_persona(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    valor_norm = normalizar_texto(valor)
+    if "juridica" in valor_norm or "persona juridica" in valor_norm:
+        return "Jurídica"
+    if "natural" in valor_norm or "persona natural" in valor_norm:
+        return "Natural"
+    return None
+
+
+def _extraer_categoria_rup(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    valor_norm = normalizar_texto(valor)
+    if "gran empresa" in valor_norm or "gran" in valor_norm:
+        return "Gran empresa"
+    if "mediana empresa" in valor_norm or "mediana" in valor_norm:
+        return "Mediana empresa"
+    if "pequena empresa" in valor_norm or "pequena" in valor_norm:
+        return "Pequeña empresa"
+    if "micro empresa" in valor_norm or "micro" in valor_norm:
+        return "Microempresa"
+    return None
+
+
+def _extraer_email(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", valor)
+    return m.group(0) if m else None
+
+
+def _extraer_telefono(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    # Buscar números de teléfono colombianos comunes (3xx xxx xxxx, 60x xxx xxxx, etc.)
+    m = re.search(r"(?:\+57\s*)?(?:\(?\d{1,3}\)?[\s\-]?)?\d{3}[\s\-]?\d{3}[\s\-]?\d{4}", re.sub(r"[^\d+\s\-()]", "", valor))
+    return m.group(0).strip() if m else None
+
+
+def _limpiar_cargo_representante(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    valor = valor.strip()
+    # Quitar prefijos genéricos que no aportan el nombre
+    prefijos = [
+        r"^y/o\s+gerente\s*",
+        r"^y/o\s+",
+        r"^gerente\s*",
+        r"^representante legal\s*",
+        r"^rep\.?\s*legal\s*",
+        r"^:\s*",
+    ]
+    for p in prefijos:
+        valor = re.sub(p, "", valor, flags=re.IGNORECASE).strip()
+    return valor if len(valor) > 2 else None
+
+
+def _extraer_representante_legal(texto: str) -> str | None:
+    valor = (
+        _buscar_etiqueta_linea_limitada(
+            texto,
+            [
+                "representante legal",
+                "nombre del representante legal",
+                "representante",
+                "rep. legal",
+            ],
+            stopwords=["nit", "cedula", "identificacion", "cargo", "direccion", "telefono", "correo"],
+        )
+        or _buscar_valor_despues(texto, ["representante legal"])
+    )
+    return _limpiar_cargo_representante(valor)
+
+
+def _limpiar_direccion(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    valor = valor.strip()
+    prefijos = [
+        r"^del\s+domicilio\s+principal\s*[:\-]?\s*",
+        r"^domicilio\s+principal\s*[:\-]?\s*",
+        r"^direccion\s*(principal|de notificacion)?\s*[:\-]?\s*",
+        r"^:\s*",
+    ]
+    for p in prefijos:
+        valor = re.sub(p, "", valor, flags=re.IGNORECASE).strip()
+    return valor if len(valor) > 3 else None
+
+
+def _extraer_direccion(texto: str) -> str | None:
+    valor = (
+        _buscar_etiqueta_linea_limitada(
+            texto,
+            ["direccion", "direccion de notificacion", "direccion principal", "domicilio"],
+            stopwords=["telefono", "correo", "ciudad", "municipio", "departamento"],
+        )
+        or _buscar_valor_despues(texto, ["direccion"])
+    )
+    return _limpiar_direccion(valor)
+
+
+def _extraer_camara_comercio(texto: str) -> str | None:
+    valor = (
+        _buscar_etiqueta_linea_limitada(
+            texto,
+            [
+                "camara de comercio",
+                "matricula mercantil",
+                "numero de matricula",
+                "matricula",
+            ],
+            stopwords=["nit", "fecha", "vigencia"],
+        )
+        or _buscar_valor_despues(texto, ["camara de comercio", "matricula mercantil"])
+    )
+    if not valor:
+        return None
+    # Intentar extraer número de matrícula
+    m = re.search(r"\d{6,}(?:\s*-\s*\d+)?", valor)
+    return m.group(0) if m else valor
+
+
+def _extraer_ciiu(texto: str) -> list[str]:
+    # Buscar códigos CIIU de 4 dígitos explícitos o prefijos comunes
+    texto_norm = normalizar_texto(texto)
+    codigos = re.findall(r"\b\d{4}\b", texto_norm)
+    # Filtrar solo los que parecen CIIU (contexto)
+    resultado = []
+    for codigo in codigos:
+        # Buscar contexto cercano de actividad económica / CIIU
+        patron = re.compile(rf"(?:ciiu|actividad economica|codigo de actividad).{{0,80}}\b{codigo}\b", re.IGNORECASE)
+        if patron.search(texto):
+            resultado.append(codigo)
+    return list(dict.fromkeys(resultado))  # preservar orden, eliminar duplicados
+
+
+def _extraer_fecha_inscripcion(texto: str) -> str | None:
+    return _parse_fecha_iso(
+        _buscar_etiqueta_linea(texto, ["fecha de inscripcion", "inscripcion", "fecha inscripcion"])
+        or _buscar_valor_despues(texto, ["fecha de inscripcion"])
+    )
+
+
+def _extraer_fecha_actualizacion(texto: str) -> str | None:
+    return _parse_fecha_iso(
+        _buscar_etiqueta_linea(texto, ["fecha de actualizacion", "actualizacion", "fecha actualizacion", "ultima actualizacion"])
+        or _buscar_valor_despues(texto, ["fecha de actualizacion", "ultima actualizacion"])
+    )
 
 
 def _parse_valor_monetario(valor: str | None) -> tuple[Decimal | None, int]:
@@ -248,39 +424,306 @@ def _limpiar_valor_monetario(valor: str | None) -> int | None:
     return int((numero * multiplicador).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
+def _extraer_razon_social_certificado(texto: str) -> str | None:
+    """Busca la razón social en certificados de Cámara de Comercio / RUP."""
+    razon = (
+        _buscar_etiqueta_linea_limitada(
+            texto,
+            ["razon social", "nombre o razon social", "razon social o nombre", "nombre", "nombre completo"],
+            stopwords=["vigencia", "nit", "unspsc", "departamentos", "estado", "tipo de persona", "categoria"],
+        )
+        or _buscar_valor_despues(texto, ["razon social"])
+    )
+    if razon:
+        return razon
+
+    # Certificado de Cámara de Comercio: buscar 'NOMBRE DEL CONTRATISTA'
+    patron = re.compile(
+        r"NOMBRE DEL CONTRATISTA\s*[:\-]?\s*(.+?)(?=\n\s*(?:NOMBRE DEL CONTRATISTA|NOMBRE DEL CONTRATANTE|CONTRATO CELEBRADO|PÁGINA|\*\*\*))",
+        re.IGNORECASE | re.DOTALL,
+    )
+    candidatas = []
+    for m in patron.finditer(texto):
+        valor = m.group(1).replace("\n", " ").strip()
+        valor = re.sub(r"^[:\-]+\s*", "", valor)
+        if valor and len(valor) > 5:
+            candidatas.append(valor)
+
+    nombres_limpios = []
+    for c in candidatas:
+        if re.search(r"\b(union temporal|consorcio|ut\s|cv\.)\b", c, re.IGNORECASE):
+            continue
+        if re.search(r"\b(s\.a\.s\.?|s\.a\.?|ltda|limitada|empresa)\b", c, re.IGNORECASE):
+            nombres_limpios.append(c)
+
+    if nombres_limpios:
+        return max(nombres_limpios, key=len)
+    return None
+
+
+def _extraer_vigencia_certificado(texto: str) -> str | None:
+    """Busca vigencia o fecha de expedición en certificados de cámara de comercio."""
+    # 1) Fecha de expedición es la más confiable en certificados de cámara de comercio.
+    m = re.search(r"fecha\s*(?:de\s*)?expedicion\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})", texto, re.IGNORECASE)
+    if m:
+        return _parse_fecha_iso(m.group(1))
+
+    fecha_exp = _buscar_etiqueta_linea(texto, ["fecha expedicion", "fecha de expedicion", "expedido el", "expedicion"])
+    if fecha_exp:
+        fecha = _parse_fecha_iso(fecha_exp)
+        if fecha:
+            return fecha
+
+    # 2) Vigencia / vencimiento explícito
+    vigencia = (
+        _buscar_etiqueta_linea(texto, ["vigencia", "valido hasta", "fecha de vencimiento", "vence", "vigente hasta"])
+        or _buscar_valor_despues(texto, ["vigencia", "valido hasta"])
+    )
+    if vigencia:
+        fecha = _parse_fecha_iso(vigencia)
+        if fecha:
+            return fecha
+
+    # 3) Fecha de expedición como palabra suelta
+    m = re.search(r"expedido\s*(?:el)?\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})", texto, re.IGNORECASE)
+    if m:
+        return _parse_fecha_iso(m.group(1))
+
+    return None
+
+
+def _extraer_municipio_departamento_cc(texto: str) -> tuple[list[str], list[str]]:
+    """Extrae municipios y departamentos de certificados de cámara de comercio."""
+    departamentos: set[str] = set()
+    municipios: set[str] = set()
+
+    for m in re.finditer(r"MUNICIPIO\s*[:\-]?\s*\d+\s*[-]\s*([A-ZÁÉÍÓÚÑ\s]+)", texto, re.IGNORECASE):
+        nombre = m.group(1).strip().title()
+        if nombre:
+            municipios.add(nombre)
+            depto = nombre.upper().replace(" D.C.", "").replace(".", "")
+            if depto in [
+                "ARAUCA", "BOGOTA", "CUNDINAMARCA", "ANTIOQUIA", "VALLE DEL CAUCA",
+                "ATLANTICO", "BOLIVAR", "BOYACA", "CALDAS", "CAQUETA", "CASANARE",
+                "CAUCA", "CESAR", "CHOCO", "CORDOBA", "GUAINIA", "GUAVIARE", "HUILA",
+                "LA GUAJIRA", "MAGDALENA", "META", "NARIÑO", "NORTE DE SANTANDER",
+                "PUTUMAYO", "QUINDIO", "RISARALDA", "SAN ANDRES", "SANTANDER", "SUCRE",
+                "TOLIMA", "VAUPES", "VICHADA", "AMAZONAS",
+            ]:
+                departamentos.add(depto.title())
+
+    m = re.search(r"CAMARA DE COMERCIO DE\s+([A-ZÁÉÍÓÚÑ\s]+)", texto, re.IGNORECASE)
+    if m:
+        cc = m.group(1).strip().title()
+        if cc:
+            departamentos.add(cc)
+
+    return sorted(departamentos), sorted(municipios)
+
+
+def _extraer_unspsc_desde_codigos(texto: str) -> list[str]:
+    """Extrae códigos UNSPSC de 8 dígitos presentes en el texto."""
+    texto_limpio = re.sub(r"(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})", r"\1\2\3\4", texto)
+    return _extraer_lista_codigos(texto_limpio)
+
+
+def _extraer_experiencia_rup(texto_raw: str) -> list[dict[str, Any]]:
+    """Extrae contratos de experiencia de certificados de Cámara de Comercio / RUP."""
+    experiencia: list[dict[str, Any]] = []
+
+    SMMLV_VALOR = 1_423_500  # Valor SMMLV Colombia 2025 por defecto
+
+    def _parse_valor_smmlv(valor_str: str) -> int | None:
+        """Convierte un valor en SMMLV (ej: 120,63) a COP."""
+        numero, _ = _parse_valor_monetario(valor_str)
+        if numero is None:
+            return None
+        return int((numero * SMMLV_VALOR).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+    def _extraer_bloque(tipo_entidad: str, match: re.Match) -> dict[str, Any] | None:
+        inicio = match.start()
+        fin = len(texto_raw)
+        siguiente = re.search(
+            r"(?:ENTIDAD CONTRATANTE|NOMBRE DEL CONTRATANTE|\*\*\* EXPERIENCIA No\.\d+)",
+            texto_raw[inicio + 1:],
+            re.IGNORECASE,
+        )
+        if siguiente:
+            fin = inicio + 1 + siguiente.start()
+        bloque = texto_raw[inicio:fin]
+
+        entidad = match.group(1).strip()
+        objeto = None
+        valor = None
+        fecha_inicio = None
+        fecha_fin = None
+        fecha_liquidacion = None
+
+        m_objeto = re.search(
+            r"OBJETO\s*[:\-]?\s*([\s\S]+?)(?=\n\s*(?:SG FM CL PR|NÚMERO CONSECUTIVO|NÚMERO DEL CONTRATO|FECHA DE|\*\*\*))",
+            bloque,
+            re.IGNORECASE,
+        )
+        if m_objeto:
+            objeto = " ".join(m_objeto.group(1).split())
+
+        # Valor en COP
+        m_valor = re.search(r"VALOR DEL CONTRATO\s*[:\-]?\s*([\$\d\.\,]+)", bloque, re.IGNORECASE)
+        if m_valor:
+            valor = _limpiar_valor_monetario(m_valor.group(1))
+
+        # Valor en SMMLV (común en certificados de cámara de comercio)
+        if valor is None:
+            m_smmlv = re.search(r"VALOR CONTRATADO EN SMMLV\s*[:\-]?\s*([\d\.\,]+)", bloque, re.IGNORECASE)
+            if m_smmlv:
+                valor = _parse_valor_smmlv(m_smmlv.group(1))
+
+        m_inicio = re.search(r"FECHA DE INICIO\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})", bloque, re.IGNORECASE)
+        if m_inicio:
+            fecha_inicio = _parse_fecha_iso(m_inicio.group(1))
+
+        m_fin = re.search(r"FECHA DE TERMINADO\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})", bloque, re.IGNORECASE)
+        if m_fin:
+            fecha_fin = _parse_fecha_iso(m_fin.group(1))
+
+        m_liq = re.search(r"FECHA DE LIQUIDACI[OÓ]N\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})", bloque, re.IGNORECASE)
+        if m_liq:
+            fecha_liquidacion = _parse_fecha_iso(m_liq.group(1))
+
+        if entidad and valor:
+            return {
+                "entidad": entidad,
+                "objeto": objeto,
+                "valor": valor,
+                "fecha_inicio": fecha_inicio,
+                "fecha_fin": fecha_fin or fecha_liquidacion,
+                "acta_liquidacion": "SI" if fecha_liquidacion else "NO",
+            }
+        return None
+
+    # Buscar bloques con ENTIDAD CONTRATANTE (contratos perfectuados/liquidados)
+    for m in re.finditer(r"ENTIDAD CONTRATANTE\s*[:\-]?\s*([^\n]+)", texto_raw, re.IGNORECASE):
+        exp = _extraer_bloque("entidad", m)
+        if exp:
+            experiencia.append(exp)
+
+    # Buscar bloques con NOMBRE DEL CONTRATANTE (experiencias numeradas)
+    for m in re.finditer(r"NOMBRE DEL CONTRATANTE\s*[:\-]?\s*([^\n]+)", texto_raw, re.IGNORECASE):
+        exp = _extraer_bloque("contratante", m)
+        if exp:
+            experiencia.append(exp)
+
+    # Deduplicar por entidad + valor + objeto (primeros 60 chars)
+    vistos: set[str] = set()
+    unicos: list[dict[str, Any]] = []
+    for e in experiencia:
+        clave = f"{e['entidad']}|{e['valor']}|{str(e['objeto'])[:60]}"
+        if clave not in vistos:
+            vistos.add(clave)
+            unicos.append(e)
+
+    return unicos
+
+
 def extraer_rup(path: str) -> dict[str, Any]:
     """Extrae campos clave de un RUP (Registro Único de Proponentes)."""
     texto_raw = extraer_texto(path)
     texto = normalizar_texto(texto_raw)
 
-    razon_social = (
-        _buscar_etiqueta_linea_limitada(
-            texto,
-            ["razon social", "nombre o razon social", "razon social o nombre"],
-            stopwords=["vigencia", "nit", "unspsc", "departamentos", "estado"],
-        )
-        or _buscar_valor_despues(texto, ["razon social"])
+    razon_social = _extraer_razon_social_certificado(texto)
+
+    nit_raw = (
+        _buscar_etiqueta_linea(texto, ["nit", "numero de identificacion tributaria", "identificacion tributaria"])
+        or _buscar_valor_despues(texto, ["nit"])
     )
+
+    vigencia_raw = (
+        _buscar_etiqueta_linea(texto, ["vigencia", "valido hasta", "fecha de vencimiento", "vence", "vigente hasta"])
+        or _buscar_valor_despues(texto, ["vigencia", "valido hasta"])
+    )
+
+    unspsc_raw = (
+        _buscar_etiqueta_linea(texto, ["codigo unspsc", "unspsc", "codigos unspsc", "categorias", "codigos de categoria"])
+        or _buscar_valor_despues(texto, ["unspsc"])
+    )
+
+    departamentos_raw = (
+        _buscar_etiqueta_linea(texto, ["departamento", "departamentos", "departamentos de operacion", "departamentos de operaciones", "ubicacion"])
+        or _buscar_valor_despues(texto, ["departamentos"])
+    )
+
+    municipios_raw = (
+        _buscar_etiqueta_linea(texto, ["municipio", "municipios", "municipios de operacion", "municipios de operaciones", "ciudad", "ciudades"])
+        or _buscar_valor_despues(texto, ["municipios"])
+    )
+
+    estado_raw = (
+        _buscar_etiqueta_linea(texto, ["estado del rup", "estado", "situacion", "estado del proponente"])
+        or _buscar_valor_despues(texto, ["estado"])
+    )
+
+    tipo_persona_raw = (
+        _buscar_etiqueta_linea(texto, ["tipo de persona", "tipo persona", "persona", "naturaleza"])
+        or _buscar_valor_despues(texto, ["tipo de persona"])
+    )
+
+    categoria_raw = (
+        _buscar_etiqueta_linea(texto, ["categoria", "categoria empresa", "tipo de empresa", "tamano de empresa"])
+        or _buscar_valor_despues(texto, ["categoria"])
+    )
+
+    correo_raw = (
+        _buscar_etiqueta_linea(texto, ["correo electronico", "email", "e-mail", "correo"])
+        or _buscar_valor_despues(texto, ["correo electronico", "email"])
+    )
+
+    telefono_raw = (
+        _buscar_etiqueta_linea(texto, ["telefono", "celular", "telefono de contacto", "numero de contacto"])
+        or _buscar_valor_despues(texto, ["telefono"])
+    )
+
+    # Datos específicos de certificados de cámara de comercio
+    depts_cc, munis_cc = _extraer_municipio_departamento_cc(texto)
+    unspsc_cc = _extraer_unspsc_desde_codigos(texto)
+    vigencia_cc = _extraer_vigencia_certificado(texto)
+    experiencia_cc = _extraer_experiencia_rup(texto_raw)
+
+    unspsc_lista = _extraer_lista_codigos(unspsc_raw)
+    if not unspsc_lista and unspsc_cc:
+        # Limitar a códigos de construcción/ingeniería más frecuentes para no saturar
+        relevantes = [c for c in unspsc_cc if c.startswith(("72", "81", "83", "80"))]
+        unspsc_lista = sorted(set(relevantes))[:30]
+
+    departamentos_lista = _extraer_lista_departamentos(departamentos_raw)
+    if not departamentos_lista and depts_cc:
+        departamentos_lista = depts_cc
+
+    municipios_lista = _extraer_lista_municipios(municipios_raw)
+    if not municipios_lista and munis_cc:
+        municipios_lista = munis_cc
+
+    vigencia_final = _parse_fecha_iso(vigencia_raw) or vigencia_cc
 
     campos = {
         "tipo_documento": "rup",
-        "nit": _extraer_nit(
-            _buscar_etiqueta_linea(texto, ["nit", "numero de identificacion tributaria"])
-            or _buscar_valor_despues(texto, ["nit"])
-        ),
+        "nit": _extraer_nit(nit_raw),
         "razon_social": razon_social,
-        "vigencia": _parse_fecha_iso(
-            _buscar_etiqueta_linea(texto, ["vigencia", "valido hasta", "fecha de vencimiento", "vence"])
-            or _buscar_valor_despues(texto, ["vigencia", "valido hasta"])
-        ),
-        "unspsc": _extraer_lista_codigos(
-            _buscar_etiqueta_linea(texto, ["codigo unspsc", "unspsc", "codigos unspsc", "categorias"])
-            or _buscar_valor_despues(texto, ["unspsc"])
-        ),
-        "departamentos": _extraer_lista_departamentos(
-            _buscar_etiqueta_linea(texto, ["departamento", "departamentos", "departamentos de operacion", "ubicacion"])
-            or _buscar_valor_despues(texto, ["departamentos"])
-        ),
+        "vigencia": vigencia_final,
+        "estado": _extraer_estado_rup(estado_raw),
+        "tipo_persona": _extraer_tipo_persona(tipo_persona_raw),
+        "categoria": _extraer_categoria_rup(categoria_raw),
+        "representante_legal": _extraer_representante_legal(texto),
+        "correo": _extraer_email(correo_raw),
+        "telefono": _extraer_telefono(telefono_raw),
+        "direccion": _extraer_direccion(texto),
+        "camara_comercio": _extraer_camara_comercio(texto),
+        "ciiu": _extraer_ciiu(texto),
+        "unspsc": unspsc_lista,
+        "departamentos": departamentos_lista,
+        "municipios": municipios_lista,
+        "fecha_inscripcion": _extraer_fecha_inscripcion(texto),
+        "fecha_actualizacion": _extraer_fecha_actualizacion(texto),
+        "experiencia": experiencia_cc,
         "texto_preview": texto_raw[:1000],
     }
 
