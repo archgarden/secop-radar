@@ -75,8 +75,11 @@ interface PerfilApi {
   departamentos: string[]
   patrimonio: number | null
   ingresos: number | null
+  activos: number | null
+  pasivos: number | null
   experiencia_valor_total: number
   experiencia_cantidad: number
+  indicadores_financieros: Record<string, number | null>
   fuentes: Record<string, string>
 }
 
@@ -94,19 +97,26 @@ export default function DocumentosCliente() {
   const [error, setError] = useState('')
   const [justUploaded, setJustUploaded] = useState(false)
 
+  async function cargarDatos() {
+    try {
+      const [docs, perfilData, coreData] = await Promise.all([
+        fetch(`${API}/clientes/${clienteId}/documentos`).then(r => r.json()),
+        fetch(`${API}/clientes/${clienteId}/perfil`).then(r => r.json()),
+        fetch(`${API}/clientes/${clienteId}/core-documentos`).then(r => r.ok ? r.json() : null),
+      ])
+      setDocumentos(docs)
+      setPerfil(perfilData)
+      setCoreDocumentos(coreData)
+      setError('')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al cargar datos')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    Promise.all([
-      fetch(`${API}/clientes/${clienteId}/documentos`).then(r => r.json()),
-      fetch(`${API}/clientes/${clienteId}/perfil`).then(r => r.json()),
-      fetch(`${API}/clientes/${clienteId}/core-documentos`).then(r => r.ok ? r.json() : null),
-    ])
-      .then(([docs, perfilData, coreData]: [DocumentoApi[], PerfilApi, CoreDocumentos | null]) => {
-        setDocumentos(docs)
-        setPerfil(perfilData)
-        setCoreDocumentos(coreData)
-        setLoading(false)
-      })
-      .catch(err => { setError(err.message); setLoading(false) })
+    cargarDatos()
   }, [clienteId])
 
   async function subirArchivo(nombre: string, file: File) {
@@ -124,9 +134,8 @@ export default function DocumentosCliente() {
       if (!r.ok) throw new Error(await r.text())
       const nuevo = await r.json()
       setDocumentos(prev => [...prev.filter(d => d.nombre !== nombre), nuevo])
-      // Refrescar perfil consolidado tras subir un documento
-      const perfilData = await fetch(`${API}/clientes/${clienteId}/perfil`).then(r => r.json())
-      setPerfil(perfilData)
+      // Refrescar perfil y core-documentos tras subir un documento
+      await cargarDatos()
       setJustUploaded(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al subir')
@@ -141,8 +150,8 @@ export default function DocumentosCliente() {
       const r = await fetch(`${API}/documentos/${id}`, { method: 'DELETE' })
       if (!r.ok) throw new Error(await r.text())
       setDocumentos(prev => prev.filter(d => d.id !== id))
-      const perfilData = await fetch(`${API}/clientes/${clienteId}/perfil`).then(r => r.json())
-      setPerfil(perfilData)
+      // Refrescar perfil y core-documentos tras eliminar un documento
+      await cargarDatos()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al eliminar')
     }
@@ -186,6 +195,31 @@ export default function DocumentosCliente() {
     if (prefix === '7215') return 'Mantenimiento'
     if (prefix === '8110') return 'Consultoría'
     return code
+  }
+
+  function labelIndicador(key: string) {
+    const labels: Record<string, string> = {
+      indice_liquidez: 'Índice de liquidez',
+      liquidez: 'Liquidez',
+      razon_corriente: 'Razón corriente',
+      indice_endeudamiento: 'Índice de endeudamiento',
+      endeudamiento: 'Endeudamiento',
+      razon_cobertura_intereses: 'Cobertura de intereses',
+      cobertura_intereses: 'Cobertura de intereses',
+      rentabilidad_patrimonio: 'Rentabilidad del patrimonio (ROE)',
+      rentabilidad_activo: 'Rentabilidad del activo (ROA)',
+    }
+    return labels[key] || key.replace(/_/g, ' ')
+  }
+
+  function fmtIndicador(key: string, value: number | null) {
+    if (value === null || value === undefined) return '—'
+    // Porcentajes para rentabilidad; multiplicador x100 si el valor está en decimales pequeños.
+    if (key.includes('rentabilidad')) {
+      const pct = Math.abs(value) < 1 ? value * 100 : value
+      return `${pct.toFixed(2)}%`
+    }
+    return value.toLocaleString('es-CO', { maximumFractionDigits: 2 })
   }
 
   useEffect(() => {
@@ -286,9 +320,23 @@ export default function DocumentosCliente() {
               <MiniMetric label="RUP vigente hasta" value={perfil.vigencia_rup || '—'} />
               <MiniMetric label="Patrimonio líquido" value={fmtCOP(perfil.patrimonio)} />
               <MiniMetric label="Ingresos operacionales" value={fmtCOP(perfil.ingresos)} />
+              <MiniMetric label="Activos totales" value={fmtCOP(perfil.activos)} />
+              <MiniMetric label="Pasivos totales" value={fmtCOP(perfil.pasivos)} />
               <MiniMetric label="Experiencia acreditada" value={`${perfil.experiencia_cantidad} contratos · ${fmtCOP(perfil.experiencia_valor_total)}`} />
               <MiniMetric label="UNSPSC" value={perfil.unspsc.length > 0 ? perfil.unspsc.map(u => `${u} · ${labelUNSPSC(u)}`).join(', ') : '—'} />
             </div>
+
+            {Object.keys(perfil.indicadores_financieros || {}).length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 9, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 8 }}>Indicadores financieros del RUP</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {Object.entries(perfil.indicadores_financieros).map(([key, value]) => (
+                    <MiniMetric key={key} label={labelIndicador(key)} value={fmtIndicador(key, value)} />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {perfil.municipio && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 9, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 5 }}>Municipio de operación principal</div>

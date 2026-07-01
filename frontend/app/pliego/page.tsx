@@ -20,6 +20,7 @@ interface CumplimientoItem {
   cumple: boolean
   documento: string | null
   documento_id: number | null
+  cubierto_por_rup?: boolean
 }
 
 interface AnalisisPliego {
@@ -385,6 +386,11 @@ function PliegoContent() {
                         {c.cumple ? (
                           <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 500 }}>
                             ✓ Cubierto por: {c.documento}
+                            {c.cubierto_por_rup && (
+                              <span style={{ marginLeft: 8, fontSize: 9, padding: '1px 6px', borderRadius: 3, background: 'rgba(59,130,246,.15)', color: '#3b82f6', fontWeight: 700 }}>
+                                PRECARGADO DESDE RUP
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <div style={{ fontSize: 12, color: 'var(--red)', fontWeight: 500 }}>

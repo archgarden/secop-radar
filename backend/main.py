@@ -171,7 +171,7 @@ class ProcesoOut(BaseModel):
     fase: str | None
     tipo_contrato: str | None
     subtipo_contrato: str | None
-    duracion: int | None
+    duracion: str | None
     unidad_duracion: str | None
     tiene_adenda: bool
     score_match: int
@@ -227,7 +227,7 @@ def _proceso_to_out(proceso: Proceso, score: int = 0) -> ProcesoOut:
         fase=proceso.fase,
         tipo_contrato=proceso.tipo_contrato,
         subtipo_contrato=proceso.subtipo_contrato,
-        duracion=proceso.duracion,
+        duracion=str(proceso.duracion) if proceso.duracion is not None else None,
         unidad_duracion=proceso.unidad_duracion,
         tiene_adenda=proceso.tiene_adenda,
         score_match=score,
@@ -380,11 +380,26 @@ def procesos_cliente(cliente_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/procesos/{proceso_id}", response_model=ProcesoOut)
-def obtener_proceso(proceso_id: int, db: Session = Depends(get_db)):
+def obtener_proceso(
+    proceso_id: int,
+    cliente_id: int | None = None,
+    db: Session = Depends(get_db),
+):
     proceso = db.query(Proceso).filter(Proceso.id == proceso_id).first()
     if not proceso:
         raise HTTPException(status_code=404, detail="Proceso no encontrado")
-    return _proceso_to_out(proceso, 0)
+
+    score = 0
+    if cliente_id:
+        match = (
+            db.query(ProcesoCliente)
+            .filter(ProcesoCliente.proceso_id == proceso_id, ProcesoCliente.cliente_id == cliente_id)
+            .first()
+        )
+        if match:
+            score = match.score_match
+
+    return _proceso_to_out(proceso, score)
 
 
 @app.post("/radar/correr/{cliente_id}")
@@ -1116,6 +1131,12 @@ def descargar_documentos_endpoint(proceso_id: int, db: Session = Depends(get_db)
     proceso = db.query(Proceso).filter(Proceso.id == proceso_id).first()
     if not proceso:
         raise HTTPException(status_code=404, detail="Proceso no encontrado")
+
+    if proceso.estado_proceso == "Borrador":
+        raise HTTPException(status_code=400, detail="Este proceso está en estado Borrador. SECOP II no publica documentos hasta que pase a Publicado/Abierto.")
+
+    if not proceso.url_documento or "OpportunityDetail" not in proceso.url_documento:
+        raise HTTPException(status_code=400, detail="No se cuenta con la URL de detalle de SECOP II (noticeUID) para este proceso. Busca el proceso en el portal y actualiza la URL antes de descargar.")
 
     try:
         resultado = descargar_documentos_proceso(proceso, db)

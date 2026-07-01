@@ -26,6 +26,7 @@ from playwright.sync_api import sync_playwright
 from sqlalchemy.orm import Session
 
 from models import DocumentoProceso, Proceso
+import secop_search
 
 load_dotenv()
 
@@ -685,7 +686,18 @@ def _procesar_un_proceso(
     """
     notice_uid = _notice_uid_from_url(proceso.url_documento)
     if not notice_uid:
-        return {"ok": False, "error": "El proceso no tiene url_documento válida con noticeUID"}
+        logger.info("Proceso %s no tiene noticeUID en url_documento; intentando buscar en SECOP II...", proceso.id)
+        notice_uid = secop_search.buscar_notice_uid_en_buscador(page, proceso, timeout_captcha=timeout_seconds)
+        if notice_uid:
+            detail_url = f"{BASE_DETAIL_URL}?noticeUID={notice_uid}"
+            proceso.url_documento = detail_url
+            db.commit()
+            logger.info("URL de detalle actualizada para proceso %s: %s", proceso.id, detail_url)
+        else:
+            return {
+                "ok": False,
+                "error": "No se encontró el noticeUID del proceso en SECOP II. Es posible que el proceso esté en Borrador o no esté publicado.",
+            }
 
     output_base = Path(SCOP_SCRAPER_STORAGE)
     if not output_base.is_absolute():

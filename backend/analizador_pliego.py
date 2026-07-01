@@ -17,6 +17,7 @@ from extraccion.requisitos_pliego import (
     extraer_requisitos_estructurados,
     resumen_requisitos_para_cliente,
 )
+from extraccion.procesador import consolidar_perfil
 from models import AnalisisProceso, Cliente, Documento, DocumentoProceso, Proceso
 
 # Máximo de páginas a OCR cuando un PDF es escaneado. Los requisitos suelen estar en las primeras páginas.
@@ -280,21 +281,27 @@ def _score_pliego(nombre: str) -> int:
 
     # Términos que indican el pliego/base principal, ordenados por peso.
     pesos = [
-        ("pliego de condiciones", 100),
-        ("documento base", 95),
-        ("bases de licitacion", 90),
+        ("pliego definitivo", 120),
+        ("documento de pliego", 115),
+        ("pliego de condiciones", 110),
+        ("documento base de contratacion", 105),
+        ("documento base de contratación", 105),
+        ("documento base", 100),
+        ("bases de licitacion", 95),
+        ("bases de licitación", 95),
         ("bases de seleccion", 90),
+        ("bases de selección", 90),
         ("terminos de referencia", 85),
         ("términos de referencia", 85),
-        ("estudios previos", 80),
-        ("estudio previo", 80),
-        ("analisis del sector", 75),
-        ("análisis del sector", 75),
-        ("pliego", 70),
-        ("condiciones", 60),
-        ("terminos", 50),
-        ("términos", 50),
-        ("base", 40),
+        ("pliego", 80),
+        ("condiciones", 70),
+        ("estudios previos", 60),
+        ("estudio previo", 60),
+        ("analisis del sector", 55),
+        ("análisis del sector", 55),
+        ("terminos", 40),
+        ("términos", 40),
+        ("base", 30),
     ]
     score = 0
     for termino, peso in pesos:
@@ -424,17 +431,38 @@ def analizar_pliego(proceso_id: int, cliente_id: int, db: Session) -> dict:
     )
     resumen_requisitos = resumen_requisitos_para_cliente(requisitos_estructurados)
 
+    perfil_cliente = consolidar_perfil(cliente_id, db)
+
     cumplimiento = []
     cumplidos = 0
     for req in requisitos:
         doc = documento_cubre_requisito(req, documentos_cliente)
-        if doc:
+        cubierto_por_rup = False
+        motivo_rup = None
+
+        if not doc:
+            # Si no hay documento explícito, verificar si el RUP aporta datos suficientes.
+            if req["id"] == "rup" and perfil_cliente.get("nit"):
+                cubierto_por_rup = True
+                motivo_rup = "Datos del RUP vigente"
+            elif req["id"] == "estados_financieros" and perfil_cliente.get("patrimonio") and perfil_cliente.get("activos") and perfil_cliente.get("pasivos"):
+                cubierto_por_rup = True
+                motivo_rup = "Estados financieros en el RUP"
+            elif req["id"] == "capacidad_financiera" and (perfil_cliente.get("indicadores_financieros") or {}).get("indice_liquidez") is not None:
+                cubierto_por_rup = True
+                motivo_rup = "Indicadores financieros del RUP"
+            elif req["id"] == "certificacion_experiencia" and perfil_cliente.get("experiencia_cantidad", 0) > 0:
+                cubierto_por_rup = True
+                motivo_rup = f"{perfil_cliente['experiencia_cantidad']} contratos en el RUP"
+
+        if doc or cubierto_por_rup:
             cumplidos += 1
         cumplimiento.append({
             "requisito": req,
-            "cumple": doc is not None,
-            "documento": doc.nombre if doc else None,
+            "cumple": doc is not None or cubierto_por_rup,
+            "documento": doc.nombre if doc else (motivo_rup or None),
             "documento_id": doc.id if doc else None,
+            "cubierto_por_rup": cubierto_por_rup,
         })
 
     score = round((cumplidos / len(requisitos)) * 100) if requisitos else 0

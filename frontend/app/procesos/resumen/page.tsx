@@ -24,7 +24,7 @@ interface Proceso {
   fase: string | null
   tipo_contrato: string | null
   subtipo_contrato: string | null
-  duracion: number | null
+  duracion: string | number | null
   unidad_duracion: string | null
   tiene_adenda: boolean
   score_match: number
@@ -77,9 +77,13 @@ function esUrlSecopDirecta(url: string | null): boolean {
   return !!url && url.includes('OpportunityDetail')
 }
 
+function procesoSinDocumentosPublicos(proceso: Proceso): boolean {
+  return proceso.estado_proceso === 'Borrador' || !esUrlSecopDirecta(proceso.url_documento)
+}
+
 function construirUrlSecop(proceso: Proceso): string {
   if (esUrlSecopDirecta(proceso.url_documento)) return proceso.url_documento!
-  return `https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?id=${encodeURIComponent(proceso.numero_proceso)}`
+  return `https://community.secop.gov.co/Public/Tendering/OpportunitySearch/Index`
 }
 
 function duracionDias(inicio: string | null, fin: string | null) {
@@ -298,7 +302,7 @@ function ResumenContent() {
     }
 
     Promise.all([
-      fetch(`${API}/procesos/${procesoId}`).then(async r => {
+      fetch(`${API}/procesos/${procesoId}?cliente_id=${clienteId}`).then(async r => {
         if (!r.ok) throw new Error(await r.text())
         return r.json()
       }),
@@ -315,7 +319,7 @@ function ResumenContent() {
         setProceso(data)
         setContratos(contratosApi)
         setDocumentos(documentosApi)
-        if (documentosApi.length === 0 && esUrlSecopDirecta(data.url_documento)) {
+        if (documentosApi.length === 0 && esUrlSecopDirecta(data.url_documento) && data.estado_proceso !== 'Borrador') {
           setMostrarCaptchaModal(true)
         }
         if (data.presupuesto > 0) {
@@ -364,9 +368,12 @@ function ResumenContent() {
   }
 
   const restantes = proceso?.fecha_cierre ? diasRestantes(proceso.fecha_cierre) : null
-  const duracion = proceso?.fecha_publicacion && proceso?.fecha_cierre
-    ? duracionDias(proceso.fecha_publicacion, proceso.fecha_cierre)
-    : null
+  const duracion =
+    proceso?.fecha_publicacion && proceso?.fecha_cierre
+      ? `${duracionDias(proceso.fecha_publicacion, proceso.fecha_cierre)} días`
+      : proceso?.duracion
+        ? `${proceso.duracion} ${proceso.unidad_duracion || 'días'}`
+        : null
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
@@ -486,7 +493,7 @@ function ResumenContent() {
                 <Info label="UNSPSC" value={proceso.unspsc_code || '—'} />
                 <Info label="Fecha de publicación" value={proceso.fecha_publicacion ? new Date(proceso.fecha_publicacion).toLocaleDateString('es-CO') : '—'} />
                 <Info label="Fecha de cierre" value={proceso.fecha_cierre ? new Date(proceso.fecha_cierre).toLocaleDateString('es-CO') : '—'} />
-                <Info label="Duración estimada" value={duracion !== null ? `${duracion} días` : '—'} />
+                <Info label="Duración estimada" value={duracion || '—'} />
                 <Info label="Días restantes" value={restantes !== null ? `${restantes} días` : '—'} color={restantes !== null && restantes <= 7 ? 'var(--red)' : undefined} />
                 <Info label="Adenda" value={proceso.tiene_adenda ? 'Sí' : 'No'} />
                 <Info label="Score de match" value={`${proceso.score_match}%`} />
@@ -585,18 +592,37 @@ function ResumenContent() {
               </div>
 
               {documentos.length === 0 ? (
-                <div style={{
-                  background: 'var(--bg)',
-                  border: '1px dashed var(--border)',
-                  borderRadius: 6,
-                  padding: '16px 18px',
-                  fontSize: 12,
-                  color: 'var(--text-sec)',
-                  lineHeight: 1.5,
-                }}>
-                  No hay documentos descargados para este proceso.<br />
-                  La descarga automática desde SECOP II está controlada por el scraper (variable <code style={{ color: 'var(--orange)' }}>SCOP_SCRAPER_ENABLED</code> en el backend). Cuando esté habilitada, aquí aparecerán el pliego, anexos y formatos.
-                </div>
+                procesoSinDocumentosPublicos(proceso) ? (
+                  <div style={{
+                    background: 'rgba(245,158,11,.08)',
+                    border: '1px solid rgba(245,158,11,.3)',
+                    borderRadius: 6,
+                    padding: '16px 18px',
+                    fontSize: 12,
+                    color: 'var(--text)',
+                    lineHeight: 1.5,
+                  }}>
+                    <strong>Proceso sin documentos públicos disponibles.</strong><br />
+                    {proceso.estado_proceso === 'Borrador'
+                      ? 'Este proceso está en estado Borrador en SECOP II. Las entidades no publican el pliego ni los anexos hasta que el proceso pasa a Publicado/Abierto.'
+                      : 'No contamos con la URL de detalle de SECOP II (noticeUID) para este proceso, por lo que no es posible descargar el pliego automáticamente.'}
+                    <br /><br />
+                    Recomendación: mantenerlo en observación. Cuando pase a Publicado/Abierto podrás descargar el pliego y analizar los requisitos reales.
+                  </div>
+                ) : (
+                  <div style={{
+                    background: 'var(--bg)',
+                    border: '1px dashed var(--border)',
+                    borderRadius: 6,
+                    padding: '16px 18px',
+                    fontSize: 12,
+                    color: 'var(--text-sec)',
+                    lineHeight: 1.5,
+                  }}>
+                    No hay documentos descargados para este proceso.<br />
+                    SECOP Radar intentará buscar automáticamente el <code style={{ color: 'var(--orange)' }}>noticeUID</code> en SECOP II, resolver el CAPTCHA y descargar el pliego y anexos. Haz clic en <strong>&ldquo;Descargar documentos&rdquo;</strong> para iniciar el proceso.
+                  </div>
+                )
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {documentos.map(d => (
@@ -786,7 +812,7 @@ function ResumenContent() {
                 <CheckItem
                   ok={esUrlSecopDirecta(proceso.url_documento)}
                   label="URL directa disponible en SECOP II"
-                  sub={esUrlSecopDirecta(proceso.url_documento) ? 'Sí' : 'Buscar manualmente'}
+                  sub={esUrlSecopDirecta(proceso.url_documento) ? 'Sí' : proceso.estado_proceso === 'Borrador' ? 'No aplica — proceso borrador' : 'Buscar manualmente'}
                 />
               </div>
             </div>
