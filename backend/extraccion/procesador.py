@@ -54,6 +54,12 @@ def consolidar_perfil(cliente_id: int, db: Session) -> dict[str, Any]:
         "departamentos": [],
         "patrimonio": cliente.patrimonio_liquido if cliente else None,
         "ingresos": cliente.ingresos_anuales if cliente else None,
+        "activos": None,
+        "pasivos": None,
+        "activo_corriente": None,
+        "pasivo_corriente": None,
+        "utilidad_operacional": None,
+        "gastos_intereses": None,
         "experiencia_valor_total": cliente.experiencia_valor_total or 0 if cliente else 0,
         "experiencia_cantidad": cliente.experiencia_cantidad or 0 if cliente else 0,
         "indicadores_financieros": _parse_json(cliente.indicadores_financieros if cliente else "[]"),
@@ -136,6 +142,48 @@ def consolidar_perfil(cliente_id: int, db: Session) -> dict[str, Any]:
             if extraccion.get("fecha_actualizacion"):
                 perfil["fecha_actualizacion"] = extraccion["fecha_actualizacion"]
                 perfil["fuentes"]["fecha_actualizacion"] = doc.filename
+
+            # Información financiera / capacidad financiera del RUP.
+            campos_financieros = [
+                "patrimonio",
+                "ingresos",
+                "activos",
+                "activo_total",
+                "pasivos",
+                "pasivo_total",
+                "activo_corriente",
+                "pasivo_corriente",
+                "utilidad_operacional",
+                "gastos_intereses",
+            ]
+            for campo in campos_financieros:
+                if extraccion.get(campo) is not None:
+                    # Normalizar alias: activo_total -> activos, pasivo_total -> pasivos
+                    clave_perfil = campo
+                    if campo == "activo_total":
+                        clave_perfil = "activos"
+                    elif campo == "pasivo_total":
+                        clave_perfil = "pasivos"
+                    perfil[clave_perfil] = extraccion[campo]
+                    perfil["fuentes"][clave_perfil] = doc.filename
+
+            indicadores_rup = {}
+            for k in [
+                "indice_liquidez",
+                "indice_endeudamiento",
+                "razon_cobertura_intereses",
+                "rentabilidad_patrimonio",
+                "rentabilidad_activo",
+            ]:
+                if extraccion.get(k) is not None:
+                    indicadores_rup[k] = extraccion[k]
+            if indicadores_rup:
+                actuales = perfil.get("indicadores_financieros") or {}
+                if isinstance(actuales, list):
+                    actuales = {k: True for k in actuales}
+                actuales.update(indicadores_rup)
+                perfil["indicadores_financieros"] = actuales
+                perfil["fuentes"]["indicadores_financieros"] = doc.filename
 
             # Experiencia contenida en el RUP (certificados de cámara de comercio)
             exp_rup = extraccion.get("experiencia") or []

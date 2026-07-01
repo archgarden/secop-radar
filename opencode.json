@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "netlify": {
+      "type": "remote",
+      "url": "https://netlify-mcp.netlify.app/mcp",
+      "enabled": true
+    }
+  }
+}

@@ -595,10 +595,62 @@ class DocumentosNoAplicaUpdate(BaseModel):
     documentos_no_aplica: list[str]
 
 
+def _documentos_cubiertos_por_rup(perfil: dict) -> dict[str, str]:
+    """Determina qué documentos del Core están cubiertos por la información del RUP.
+
+    El certificado de Cámara de Comercio / RUP incluye información que sustituye
+    parcial o totalmente algunos documentos solicitados en los pliegos.
+    """
+    cubiertos: dict[str, str] = {}
+    if not perfil:
+        return cubiertos
+
+    indicadores = perfil.get("indicadores_financieros") or {}
+    if isinstance(indicadores, list):
+        indicadores = {k: True for k in indicadores}
+
+    fuentes = perfil.get("fuentes") or {}
+    experiencia = perfil.get("experiencia") or fuentes.get("experiencia") or []
+    if isinstance(experiencia, list):
+        contratos_con_liquidacion = [
+            e for e in experiencia if isinstance(e, dict) and e.get("acta_liquidacion") == "SI"
+        ]
+        total_contratos = len(experiencia)
+    else:
+        contratos_con_liquidacion = []
+        total_contratos = 0
+
+    # Estados financieros: activos, pasivos y patrimonio (suficiente para recomendar).
+    if perfil.get("patrimonio") and perfil.get("activos") and perfil.get("pasivos"):
+        cubiertos["estados_financieros"] = "Dato disponible en RUP para recomendación"
+
+    # Capacidad financiera: índices de liquidez y endeudamiento.
+    if indicadores.get("indice_liquidez") is not None or indicadores.get("indice_endeudamiento") is not None:
+        cubiertos["capacidad_financiera"] = "Dato disponible en RUP para recomendación"
+
+    # Matriz 2 — Indicadores: múltiples indicadores financieros/organizacionales.
+    indicadores_clave = [
+        "indice_liquidez",
+        "indice_endeudamiento",
+        "razon_cobertura_intereses",
+        "rentabilidad_patrimonio",
+        "rentabilidad_activo",
+    ]
+    indicadores_encontrados = sum(1 for k in indicadores_clave if indicadores.get(k) is not None)
+    if indicadores_encontrados >= 2:
+        cubiertos["matriz2_indicadores"] = "Dato disponible en RUP para recomendación"
+
+    # Matriz 1 — Experiencia: experiencia acreditada en el RUP.
+    if total_contratos > 0:
+        cubiertos["matriz1_experiencia"] = f"{total_contratos} contratos reportados en el RUP para recomendación"
+
+    return cubiertos
+
+
 @app.get("/clientes/{cliente_id}/core-documentos")
 def core_documentos_cliente(cliente_id: int, db: Session = Depends(get_db)):
     """Devuelve el Core de Documentos Base Fijos marcando los documentos
-    que el cliente tiene configurados como 'no aplica'."""
+    que el cliente tiene configurados como 'no aplica' o cubiertos por el RUP."""
     cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -608,6 +660,14 @@ def core_documentos_cliente(cliente_id: int, db: Session = Depends(get_db)):
     if not core:
         raise HTTPException(status_code=503, detail="Core de documentos no disponible")
 
+    # Reglas de negocio: ciertos documentos no aplican según el perfil del cliente.
+    # La capacidad residual solo aplica si el cliente tiene contratos en ejecución.
+    sin_contratos_vigentes = not (cliente.contratos_vigentes_valor and cliente.contratos_vigentes_valor > 0)
+
+    # Documentos cubiertos por la información del RUP.
+    perfil = consolidar_perfil(cliente_id, db)
+    cubiertos_por_rup = _documentos_cubiertos_por_rup(perfil)
+
     resultado = {}
     for categoria, documentos in core.items():
         if categoria in ("version", "fecha_generacion", "fuente", "procesos_analizados", "umbrales", "requisitos_estructurados"):
@@ -616,7 +676,20 @@ def core_documentos_cliente(cliente_id: int, db: Session = Depends(get_db)):
         resultado[categoria] = []
         for doc in documentos:
             doc_con_estado = dict(doc)
-            doc_con_estado["no_aplica"] = doc.get("id") in no_aplica
+            doc_id = doc.get("id")
+            manual_no_aplica = doc_id in no_aplica
+            auto_no_aplica = doc_id == "capacidad_residual" and sin_contratos_vigentes
+            cubierto_motivo = cubiertos_por_rup.get(doc_id)
+
+            doc_con_estado["no_aplica"] = manual_no_aplica or auto_no_aplica
+            doc_con_estado["cubierto_por_rup"] = bool(cubierto_motivo)
+            doc_con_estado["cubierto_por_rup_motivo"] = cubierto_motivo
+
+            if auto_no_aplica and not manual_no_aplica:
+                doc_con_estado["no_aplica_motivo"] = "Sin contratos vigentes"
+                doc_con_estado["frecuencia_label"] = "no aplica"
+            elif cubierto_motivo:
+                doc_con_estado["frecuencia_label"] = "precargado"
             resultado[categoria].append(doc_con_estado)
     return resultado
 

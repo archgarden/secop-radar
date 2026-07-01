@@ -23,6 +23,8 @@ interface CoreDocumento {
   frecuencia_label: string
   procesos_analizados: number
   no_aplica?: boolean
+  cubierto_por_rup?: boolean
+  cubierto_por_rup_motivo?: string
 }
 
 interface CoreDocumentos {
@@ -148,7 +150,8 @@ export default function DocumentosCliente() {
 
   const documentosCore = coreDocumentos?.proponente || []
 
-  function documentoCubreCore(doc: CoreDocumento, nombresSubidos: string[]): DocumentoApi | undefined {
+  function documentoCubreCore(doc: CoreDocumento, nombresSubidos: string[]): DocumentoApi | undefined | 'rup' {
+    if (doc.cubierto_por_rup) return 'rup'
     const terminos = [doc.nombre, ...doc.keywords]
     for (const termino of terminos) {
       if (!termino) continue
@@ -309,15 +312,18 @@ export default function DocumentosCliente() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {documentosCore.map(docCore => {
-              const doc = documentoCubreCore(docCore, documentos.map(d => d.nombre))
+              const docOrRup = documentoCubreCore(docCore, documentos.map(d => d.nombre))
+              const cubiertoPorRUP = docOrRup === 'rup'
+              const doc = cubiertoPorRUP ? undefined : docOrRup
               const nombre = docCore.nombre
               const isUploading = uploading === nombre
               const isExtracting = extracting === nombre
               const noAplica = docCore.no_aplica
+              const cumplido = doc || cubiertoPorRUP
               return (
                 <div key={docCore.id} style={{
                   background: noAplica ? 'rgba(100,116,139,0.08)' : 'var(--surface)',
-                  border: `1px solid ${doc ? 'rgba(34,197,94,.35)' : noAplica ? 'var(--border)' : 'var(--border)'}`,
+                  border: `1px solid ${cumplido ? 'rgba(34,197,94,.35)' : noAplica ? 'var(--border)' : 'var(--border)'}`,
                   borderRadius: 6,
                   overflow: 'hidden',
                   opacity: noAplica ? 0.7 : 1,
@@ -325,12 +331,12 @@ export default function DocumentosCliente() {
                   <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={{
                       width: 28, height: 28, borderRadius: '50%',
-                      background: doc ? 'rgba(34,197,94,.15)' : noAplica ? 'rgba(100,116,139,.15)' : 'rgba(239,68,68,.1)',
-                      border: `1px solid ${doc ? 'var(--green)' : noAplica ? 'var(--text-sec)' : 'var(--red)'}`,
+                      background: cumplido ? 'rgba(34,197,94,.15)' : noAplica ? 'rgba(100,116,139,.15)' : 'rgba(239,68,68,.1)',
+                      border: `1px solid ${cumplido ? 'var(--green)' : noAplica ? 'var(--text-sec)' : 'var(--red)'}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
                     }}>
-                      {doc ? (
+                      {cumplido ? (
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
@@ -349,14 +355,22 @@ export default function DocumentosCliente() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{nombre}</div>
-                        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5, padding: '2px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: docCore.frecuencia_label === 'obligatorio' ? 'var(--green)' : docCore.frecuencia_label === 'frecuente' ? 'var(--yellow)' : 'var(--text-sec)', fontWeight: 600 }}>
+                        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5, padding: '2px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: docCore.frecuencia_label === 'obligatorio' || docCore.frecuencia_label === 'precargado' ? 'var(--green)' : docCore.frecuencia_label === 'frecuente' ? 'var(--yellow)' : 'var(--text-sec)', fontWeight: 600 }}>
                           {docCore.frecuencia_label}
                         </span>
                         {noAplica && <span style={{ fontSize: 9, color: 'var(--text-sec)', fontWeight: 600 }}>No aplica</span>}
+                        {cubiertoPorRUP && <span style={{ fontSize: 9, color: 'var(--green)', fontWeight: 600 }}>Precargado desde RUP</span>}
                       </div>
                       {doc && (
                         <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 2 }}>
                           {doc.filename} · {new Date(doc.fecha_subida).toLocaleDateString('es-CO')}
+                        </div>
+                      )}
+                      {cubiertoPorRUP && docCore.cubierto_por_rup_motivo && (
+                        <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 2 }}>
+                          {docCore.cubierto_por_rup_motivo}
+                          {' · '}
+                          <span style={{ color: 'var(--yellow)' }}>Para postular se requiere el original</span>
                         </div>
                       )}
                       {isExtracting && (
@@ -381,7 +395,7 @@ export default function DocumentosCliente() {
                       >
                         Cambiar
                       </button>
-                    ) : (
+                    ) : cubiertoPorRUP ? null : (
                       <label style={{
                         background: isUploading || noAplica ? 'var(--border)' : 'var(--orange)',
                         color: '#fff',

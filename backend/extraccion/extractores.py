@@ -183,6 +183,23 @@ def _extraer_tipo_persona(valor: str | None) -> str | None:
         return "Jurídica"
     if "natural" in valor_norm or "persona natural" in valor_norm:
         return "Natural"
+    # Certificados de Cámara de Comercio usan "organizacion" (SAS, S.A., LTDA, etc.).
+    if any(term in valor_norm for term in [
+        "sociedad por acciones simplificada",
+        "sas",
+        "sa",
+        "limitada",
+        "ltda",
+        "s a s",
+        "s. a. s.",
+        "s.a.",
+        "l.t.d.a.",
+        "empresa unipersonal",
+        "comandita",
+        "cooperativa",
+        "fundacion",
+    ]):
+        return "Jurídica"
     return None
 
 
@@ -540,6 +557,16 @@ def _extraer_experiencia_rup(texto_raw: str) -> list[dict[str, Any]]:
             return None
         return int((numero * SMMLV_VALOR).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
+    def _extraer_unspsc_bloque(bloque: str) -> list[str]:
+        """Extrae códigos UNSPSC de 8 dígitos listados dentro de un bloque de experiencia."""
+        # Los certificados de Cámara de Comercio listan los códigos como "XX XX XX XX : descripción"
+        codigos: list[str] = []
+        for m in re.finditer(r"(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*:", bloque):
+            codigo = f"{m.group(1)}{m.group(2)}{m.group(3)}{m.group(4)}"
+            if codigo not in codigos:
+                codigos.append(codigo)
+        return codigos
+
     def _extraer_bloque(tipo_entidad: str, match: re.Match) -> dict[str, Any] | None:
         inicio = match.start()
         fin = len(texto_raw)
@@ -555,12 +582,13 @@ def _extraer_experiencia_rup(texto_raw: str) -> list[dict[str, Any]]:
         entidad = match.group(1).strip()
         objeto = None
         valor = None
+        valor_smmlv = None
         fecha_inicio = None
         fecha_fin = None
         fecha_liquidacion = None
 
         m_objeto = re.search(
-            r"OBJETO\s*[:\-]?\s*([\s\S]+?)(?=\n\s*(?:SG FM CL PR|NÚMERO CONSECUTIVO|NÚMERO DEL CONTRATO|FECHA DE|\*\*\*))",
+            r"OBJETO\s*[:\-]?\s*([\s\S]+?)(?=\n\s*(?:SG FM CL PR|NÚMERO CONSECUTIVO|NÚMERO DEL CONTRATO|FECHA DE|VALOR CONTRATADO|VALOR DEL CONTRATO|\*\*\*))",
             bloque,
             re.IGNORECASE,
         )
@@ -573,10 +601,11 @@ def _extraer_experiencia_rup(texto_raw: str) -> list[dict[str, Any]]:
             valor = _limpiar_valor_monetario(m_valor.group(1))
 
         # Valor en SMMLV (común en certificados de cámara de comercio)
-        if valor is None:
-            m_smmlv = re.search(r"VALOR CONTRATADO EN SMMLV\s*[:\-]?\s*([\d\.\,]+)", bloque, re.IGNORECASE)
-            if m_smmlv:
-                valor = _parse_valor_smmlv(m_smmlv.group(1))
+        m_smmlv = re.search(r"VALOR CONTRATADO EN SMMLV\s*[:\-]?\s*([\d\.\,]+)", bloque, re.IGNORECASE)
+        if m_smmlv:
+            valor_smmlv = _parse_valor_smmlv(m_smmlv.group(1))
+            if valor is None:
+                valor = valor_smmlv
 
         m_inicio = re.search(r"FECHA DE INICIO\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})", bloque, re.IGNORECASE)
         if m_inicio:
@@ -595,9 +624,12 @@ def _extraer_experiencia_rup(texto_raw: str) -> list[dict[str, Any]]:
                 "entidad": entidad,
                 "objeto": objeto,
                 "valor": valor,
+                "valor_smmlv": valor_smmlv,
                 "fecha_inicio": fecha_inicio,
                 "fecha_fin": fecha_fin or fecha_liquidacion,
+                "fecha_liquidacion": fecha_liquidacion,
                 "acta_liquidacion": "SI" if fecha_liquidacion else "NO",
+                "unspsc": _extraer_unspsc_bloque(bloque),
             }
         return None
 
@@ -623,6 +655,212 @@ def _extraer_experiencia_rup(texto_raw: str) -> list[dict[str, Any]]:
             unicos.append(e)
 
     return unicos
+
+
+def _extraer_representante_legal_rup(texto_raw: str) -> str | None:
+    """Extrae el representante legal del formato específico de certificados RUP.
+
+    Ejemplo:
+        REPRESENTANTE No.1 :
+        NOMBRE:ESTRADA LANDAETA JOSE LUIS
+        IDENTIFICACIÓN:Cédula de ciudadania - 17594989
+        CARGO:REPRESENTANTE LEGAL Y/O GERENTE
+    """
+    patron = re.compile(
+        r"REPRESENTANTE\s+No\.?\s*\d*\s*[:\n]\s*"
+        r"NOMBRE\s*[:\-]\s*([^\n]+?)(?=\n\s*(?:IDENTIFICACI[OÓ]N|CARGO|NOMBRE|REPRESENTANTE|\*\*\*))",
+        re.IGNORECASE | re.DOTALL,
+    )
+    m = patron.search(texto_raw)
+    if m:
+        nombre = " ".join(m.group(1).split())
+        return _limpiar_cargo_representante(nombre)
+    return None
+
+
+def _extraer_telefono_rup(texto_raw: str) -> str | None:
+    """Extrae teléfono(s) del formato específico de certificados RUP.
+
+    Ejemplo:
+        TELEFONO 1:8851001
+        TELEFONO 3:3175022355
+    """
+    telefonos: list[str] = []
+    for m in re.finditer(r"TELEFONO\s*\d*\s*[:\-]\s*([\d\s\-+()]+)", texto_raw, re.IGNORECASE):
+        tel = re.sub(r"[^\d+]", "", m.group(1)).strip()
+        if tel and len(tel) >= 7:
+            telefonos.append(tel)
+    if telefonos:
+        # Preferir móvil (10 dígitos) si existe, sino el primero.
+        for t in telefonos:
+            if len(t) == 10:
+                return t
+        return telefonos[0]
+    return None
+
+
+def _extraer_informacion_financiera_rup(texto_raw: str) -> dict[str, Any]:
+    """Extrae la sección de información financiera / capacidad financiera del RUP.
+
+    Ejemplo:
+        FECHA CORTE DE LA INFORMACIÓN FINANCIERA : 31/12/2024
+        ACTIVO CORRIENTE : $1.043.653.680,00
+        ACTIVO TOTAL : $1.043.653.680,00
+        PASIVO CORRIENTE : $134.759.414,00
+        PASIVO TOTAL : $134.759.414,00
+        PATRIMONIO : $908.894.266,00
+        UTILIDAD/PERDIDA OPERACIONAL : $93.554.492,00
+        GASTOS DE INTERESES : $12.965,00
+        INDICE DE LIQUIDEZ : 7,74
+        INDICE DE ENDEUDAMIENTO : 0,12
+        RAZÓN DE COBERTURA DE INTERESES : 7215,92
+    """
+    info: dict[str, Any] = {}
+
+    def _valor_linea(etiquetas: list[str]) -> str | None:
+        return _buscar_etiqueta_linea(texto_raw, etiquetas)
+
+    def _numero_linea(etiquetas: list[str]) -> int | None:
+        val = _valor_linea(etiquetas)
+        return _limpiar_valor_monetario(val) if val else None
+
+    def _float_linea(etiquetas: list[str]) -> float | None:
+        val = _valor_linea(etiquetas)
+        if not val:
+            return None
+        # Normalizar separador decimal (coma -> punto) quitando símbolos monetarios.
+        limpio = re.sub(r"[^\d,\.-]", "", val).strip()
+        # Si hay coma y punto, asumimos convención latina: punto=miles, coma=decimal.
+        if "," in limpio and "." in limpio:
+            limpio = limpio.replace(".", "").replace(",", ".")
+        elif "," in limpio:
+            # Podría ser separador de miles o decimal. Si solo hay una coma seguida de 1-2 dígitos al final, es decimal.
+            partes = limpio.split(",")
+            if len(partes) == 2 and len(partes[-1]) <= 2:
+                limpio = partes[0] + "." + partes[1]
+            else:
+                limpio = limpio.replace(",", "")
+        try:
+            return float(limpio)
+        except Exception:
+            return None
+
+    fecha_corte = _valor_linea([
+        "fecha corte de la informacion financiera",
+        "fecha corte informacion financiera",
+        "corte informacion financiera",
+        "fecha de corte",
+    ])
+    if fecha_corte:
+        info["fecha_corte_informacion_financiera"] = _parse_fecha_iso(fecha_corte)
+
+    info["activo_corriente"] = _numero_linea(["activo corriente", "total activo corriente", "activos corrientes"])
+    info["activo_total"] = _numero_linea(["activo total", "total activos", "activos totales"])
+    info["pasivo_corriente"] = _numero_linea(["pasivo corriente", "total pasivo corriente", "pasivos corrientes"])
+    info["pasivo_total"] = _numero_linea(["pasivo total", "total pasivos", "pasivos totales"])
+    info["patrimonio"] = _numero_linea([
+        "patrimonio",
+        "patrimonio liquido",
+        "total patrimonio",
+        "patrimonio total",
+    ])
+    info["ingresos"] = _numero_linea([
+        "ingresos operacionales",
+        "ingresos de actividades ordinarias",
+        "ingresos",
+        "ventas",
+    ])
+    info["utilidad_operacional"] = _numero_linea([
+        "utilidad/perdida operacional",
+        "utilidad operacional",
+        "perdida operacional",
+        "utilidad en operacion",
+        "ganancia operacional",
+    ])
+    info["gastos_intereses"] = _numero_linea([
+        "gastos de intereses",
+        "gastos por intereses",
+        "intereses",
+        "gastos financieros",
+    ])
+
+    info["indice_liquidez"] = _float_linea(["indice de liquidez", "liquidez"])
+    info["indice_endeudamiento"] = _float_linea(["indice de endeudamiento", "endeudamiento"])
+    info["razon_cobertura_intereses"] = _float_linea([
+        "razon de cobertura de intereses",
+        "razón de cobertura de intereses",
+        "cobertura de intereses",
+    ])
+
+    # Calcular indicadores propios si faltan y tenemos datos suficientes.
+    activo_total = info.get("activo_total")
+    pasivo_total = info.get("pasivo_total")
+    patrimonio = info.get("patrimonio")
+    activo_corriente = info.get("activo_corriente")
+    pasivo_corriente = info.get("pasivo_corriente")
+    utilidad_operacional = info.get("utilidad_operacional")
+    gastos_intereses = info.get("gastos_intereses")
+
+    if activo_corriente is not None and pasivo_corriente and pasivo_corriente != 0 and info.get("indice_liquidez") is None:
+        info["indice_liquidez"] = round(activo_corriente / pasivo_corriente, 4)
+    if pasivo_total is not None and activo_total and activo_total != 0 and info.get("indice_endeudamiento") is None:
+        info["indice_endeudamiento"] = round(pasivo_total / activo_total, 4)
+    if utilidad_operacional is not None and gastos_intereses and gastos_intereses != 0 and info.get("razon_cobertura_intereses") is None:
+        info["razon_cobertura_intereses"] = round(utilidad_operacional / gastos_intereses, 4)
+
+    # Validación contable básica.
+    if activo_total and pasivo_total and patrimonio:
+        diferencia = abs(activo_total - pasivo_total - patrimonio)
+        info["balance_ok"] = diferencia < max(activo_total * 0.02, 1000)
+        info["balance_diferencia"] = diferencia
+
+    return {k: v for k, v in info.items() if v is not None}
+
+
+def _extraer_capacidad_organizacional_rup(texto_raw: str) -> dict[str, Any]:
+    """Extrae indicadores de capacidad organizacional del RUP.
+
+    Ejemplo:
+        QUE EN RELACIÓN A LOS INDICADORES DE LA CAPACIDAD ORGANIZACIONAL EL PROPONENTE REPORTÓ
+        CON CORTE A 31/12/2024
+        RENTABILIDAD DEL PATRIMONIO : 0,10
+        RENTABILIDAD DEL ACTIVO : 0,08
+    """
+    info: dict[str, Any] = {}
+
+    def _float_linea(etiquetas: list[str]) -> float | None:
+        val = _buscar_etiqueta_linea(texto_raw, etiquetas)
+        if not val:
+            return None
+        limpio = re.sub(r"[^\d,\.-]", "", val).strip()
+        if "," in limpio and "." in limpio:
+            limpio = limpio.replace(".", "").replace(",", ".")
+        elif "," in limpio:
+            partes = limpio.split(",")
+            if len(partes) == 2 and len(partes[-1]) <= 2:
+                limpio = partes[0] + "." + partes[1]
+            else:
+                limpio = limpio.replace(",", "")
+        try:
+            return float(limpio)
+        except Exception:
+            return None
+
+    rentabilidad_patrimonio = _float_linea([
+        "rentabilidad del patrimonio",
+        "rentabilidad patrimonio",
+    ])
+    if rentabilidad_patrimonio is not None:
+        info["rentabilidad_patrimonio"] = rentabilidad_patrimonio
+
+    rentabilidad_activo = _float_linea([
+        "rentabilidad del activo",
+        "rentabilidad activo",
+    ])
+    if rentabilidad_activo is not None:
+        info["rentabilidad_activo"] = rentabilidad_activo
+
+    return info
 
 
 def extraer_rup(path: str) -> dict[str, Any]:
@@ -663,8 +901,8 @@ def extraer_rup(path: str) -> dict[str, Any]:
     )
 
     tipo_persona_raw = (
-        _buscar_etiqueta_linea(texto, ["tipo de persona", "tipo persona", "persona", "naturaleza"])
-        or _buscar_valor_despues(texto, ["tipo de persona"])
+        _buscar_etiqueta_linea(texto, ["organizacion", "tipo de persona", "tipo persona", "persona", "naturaleza"])
+        or _buscar_valor_despues(texto, ["organizacion", "tipo de persona"])
     )
 
     categoria_raw = (
@@ -687,6 +925,8 @@ def extraer_rup(path: str) -> dict[str, Any]:
     unspsc_cc = _extraer_unspsc_desde_codigos(texto)
     vigencia_cc = _extraer_vigencia_certificado(texto)
     experiencia_cc = _extraer_experiencia_rup(texto_raw)
+    financiera_cc = _extraer_informacion_financiera_rup(texto_raw)
+    organizacional_cc = _extraer_capacidad_organizacional_rup(texto_raw)
 
     unspsc_lista = _extraer_lista_codigos(unspsc_raw)
     if not unspsc_lista and unspsc_cc:
@@ -704,7 +944,10 @@ def extraer_rup(path: str) -> dict[str, Any]:
 
     vigencia_final = _parse_fecha_iso(vigencia_raw) or vigencia_cc
 
-    campos = {
+    representante_legal = _extraer_representante_legal_rup(texto_raw) or _extraer_representante_legal(texto)
+    telefono = _extraer_telefono_rup(texto_raw) or _extraer_telefono(telefono_raw)
+
+    campos: dict[str, Any] = {
         "tipo_documento": "rup",
         "nit": _extraer_nit(nit_raw),
         "razon_social": razon_social,
@@ -712,9 +955,9 @@ def extraer_rup(path: str) -> dict[str, Any]:
         "estado": _extraer_estado_rup(estado_raw),
         "tipo_persona": _extraer_tipo_persona(tipo_persona_raw),
         "categoria": _extraer_categoria_rup(categoria_raw),
-        "representante_legal": _extraer_representante_legal(texto),
+        "representante_legal": representante_legal,
         "correo": _extraer_email(correo_raw),
-        "telefono": _extraer_telefono(telefono_raw),
+        "telefono": telefono,
         "direccion": _extraer_direccion(texto),
         "camara_comercio": _extraer_camara_comercio(texto),
         "ciiu": _extraer_ciiu(texto),
@@ -726,6 +969,10 @@ def extraer_rup(path: str) -> dict[str, Any]:
         "experiencia": experiencia_cc,
         "texto_preview": texto_raw[:1000],
     }
+
+    # Agregar información financiera y organizacional extraída del certificado RUP.
+    campos.update(financiera_cc)
+    campos.update(organizacional_cc)
 
     # Calcular confianza básica: cuántos campos clave logramos extraer
     clave = ["nit", "razon_social", "vigencia", "unspsc"]
