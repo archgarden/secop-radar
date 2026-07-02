@@ -505,7 +505,7 @@ function PreseleccionContent() {
 
             {clienteId && (
               <div style={{ marginBottom: 24 }}>
-                <ClientProfilePanel clienteId={Number(clienteId)} />
+                <ClientProfilePanel clienteId={Number(clienteId)} compact />
               </div>
             )}
 

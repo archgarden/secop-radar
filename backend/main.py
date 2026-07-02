@@ -365,10 +365,14 @@ def procesos_cliente(cliente_id: int, db: Session = Depends(get_db)):
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
+    # No mostrar como oportunidades principales los procesos cancelados.
+    estados_excluidos = {"Cancelado"}
+
     rows = (
         db.query(Proceso, ProcesoCliente.score_match)
         .join(ProcesoCliente, ProcesoCliente.proceso_id == Proceso.id)
         .filter(ProcesoCliente.cliente_id == cliente_id)
+        .filter(Proceso.estado_proceso.notin_(estados_excluidos))
         .order_by(ProcesoCliente.score_match.desc())
         .all()
     )
